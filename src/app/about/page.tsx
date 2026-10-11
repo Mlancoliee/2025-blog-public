@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { ArrowRight } from 'lucide-react'
 import { motion } from 'motion/react'
 import { useMarkdownRender } from '@/hooks/use-markdown-render'
 import LikeButton from '@/components/like-button'
@@ -17,7 +19,7 @@ export default function Page() {
 	const [markdown, setMarkdown] = useState('')
 	const [contentLoading, setContentLoading] = useState(true)
 	const [contentError, setContentError] = useState(false)
-	const { content, loading: markdownLoading } = useMarkdownRender(markdown)
+	const { content, loading: markdownLoading } = useMarkdownRender(markdown, { worker: false })
 
 	useEffect(() => {
 		let cancelled = false
@@ -51,6 +53,12 @@ export default function Page() {
 				<motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className='mb-12 text-center'>
 					<h1 className='mb-4 text-4xl font-bold'>{data.title}</h1>
 					<p className='text-secondary text-lg'>{data.description}</p>
+					<Link
+						href='/changelog'
+						className='group mt-5 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm text-[color-mix(in_srgb,var(--color-brand)_40%,var(--color-primary))] transition-colors hover:bg-brand/10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand'>
+						更新日志
+						<ArrowRight aria-hidden='true' className='size-4 transition-transform group-hover:translate-x-1 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0' />
+					</Link>
 				</motion.div>
 
 				{loading ? (
