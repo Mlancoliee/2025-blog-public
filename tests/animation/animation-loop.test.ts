@@ -47,7 +47,7 @@ describe('animation loop lifecycle', () => {
   it('observes an optional element and releases the observer on destroy', () => {
     const observe = vi.fn(); const disconnect = vi.fn()
     let notify: ((entries: Array<{ isIntersecting: boolean }>) => void) | undefined
-    vi.stubGlobal('IntersectionObserver', vi.fn((callback: typeof notify) => {
+    vi.stubGlobal('IntersectionObserver', vi.fn(function (callback: typeof notify) {
       notify = callback
       return { observe, disconnect }
     }))

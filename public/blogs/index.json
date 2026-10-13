@@ -42,7 +42,7 @@
 		"slug": "mysql-innodb-underlying-mechanism",
 		"title": "MySQL / InnoDB 底层机制深度解析",
 		"tags": ["MySQL", "InnoDB", "数据库底层", "后端开发"],
-		"date": "2026-05-10",
+		"date": "2026-05-30",
 		"summary": "从存储结构、B+ 树索引、Buffer Pool、事务日志、MVCC、锁到主从复制，系统讲解 MySQL/InnoDB 底层机制。不背概念，而是从「数据怎么存、索引怎么查、事务怎么恢复、并发怎么隔离、SQL 怎么执行」这几条主线讲清楚数据库。"
 	},
 	{
@@ -57,7 +57,8 @@
 		"title": "软件体系结构中的 23 个 GoF 设计模式：从创建、组合到协作",
 		"tags": ["软件体系结构", "设计模式", "GoF", "面向对象"],
 		"date": "2026-05-12",
-		"summary": "系统拆解 GoF 23 个设计模式在软件体系结构中的位置：创建型模式管理对象生命周期，结构型模式管理模块边界和对象组合，行为型模式管理协作流程和变化点。"
+		"summary": "系统拆解 GoF 23 个设计模式在软件体系结构中的位置：创建型模式管理对象生命周期，结构型模式管理模块边界和对象组合，行为型模式管理协作流程和变化点。",
+		"cover": "/blogs/software-architecture-gof-23-design-patterns/LOGO.png"
 	},
 	{
 		"slug": "rag-open-source-solutions-and-community-practices",
@@ -144,7 +145,7 @@
 		"slug": "practical-machine-learning-limu",
 		"title": "斯坦福 21 秋季：实用机器学习中文版",
 		"tags": ["机器学习", "李沐", "课程笔记", "实用机器学习"],
-		"date": "2024-07-24",
+		"date": "2024-07-01",
 		"summary": "《斯坦福 21 秋季：实用机器学习中文版》的音频转写逐字去噪校正版，覆盖课程介绍、数据获取、特征工程、模型评估、调参、迁移学习等章节。"
 	}
 ]

@@ -29,7 +29,7 @@ export function loadOfficeZip() {
 
 export async function readPart(entry: Entry, signal: AbortSignal, limit: number) {
 	if (entry.uncompressedSize > limit) throw new Error(`文件内部资源过大：${entry.filename}`)
-	const chunks: Uint8Array[] = []
+	const chunks: Uint8Array<ArrayBuffer>[] = []
 	let size = 0
 	await entry.getData(new WritableStream<Uint8Array>({
 		write(chunk) {

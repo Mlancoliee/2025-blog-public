@@ -1,5 +1,3 @@
-/// <reference lib="webworker" />
-
 import { NativeWorkerDecodeUnavailable } from './decode'
 import { compressImage, ImagePipelineError } from './pipeline'
 import type { ImageWorkerRequest, ImageWorkerResponse } from './types'

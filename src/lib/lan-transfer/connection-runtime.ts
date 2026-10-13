@@ -11,7 +11,7 @@ import { createStorageEngine } from './storage/storage-manager'
 import type { TransferFileMeta } from './storage/types'
 import { loadIncomingTransfers, removeIncomingTransfer, removeRuntimeTransfers, saveIncomingTransfer, type LanRuntimeIdentity } from './runtime-store'
 import type { AttachmentPatch, CachedReceivedFile, IncomingAttachment, LanConnectionRuntimeEvent, PreparedEntry, ProgressCheckpoint, ResumeSync, RuntimeContext, RuntimeListener, SendFilesOptions, TransferSample } from './connection-runtime-types'
-import { LAN_LIMITS, LAN_PROTOCOL_VERSION, type LanAttachment, type LanAttachmentOffer, type LanCapability, type LanControlMessage, type LanNativeAgentTicket, type LanWebRtcBenchmarkDirection, type LanWebRtcBenchmarkProgress } from './types'
+import { LAN_LIMITS, LAN_PROTOCOL_VERSION, type LanAttachment, type LanAttachmentOffer, type LanAttachmentReceived, type LanCapability, type LanControlMessage, type LanNativeAgentTicket, type LanWebRtcBenchmarkDirection, type LanWebRtcBenchmarkProgress } from './types'
 export type { LanConnectionRuntimeEvent } from './connection-runtime-types'
 
 export class LanConnectionRuntime {
@@ -421,7 +421,7 @@ export class LanConnectionRuntime {
 				await prepared.engine.cleanup(prepared.meta.id).catch(() => {})
 				return
 			}
-			const current = { offer, ...prepared }
+			const current = prepared
 			this.incoming.set(id, current)
 			this.pendingOffers.delete(id)
 			this.resetTransferSample(id, current.received)

@@ -135,7 +135,7 @@ describe('PDF extraction flow', () => {
       }),
       terminate: vi.fn()
     }
-    vi.stubGlobal('Worker', vi.fn(() => worker))
+    vi.stubGlobal('Worker', vi.fn(function () { return worker }))
     const onProgress = vi.fn()
 
     const result = await extractPdfText(documentWith(shortPage), options({ onProgress }))

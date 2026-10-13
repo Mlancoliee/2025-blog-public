@@ -1,4 +1,3 @@
-/// <reference lib="webworker" />
 import { optimizeOfficeImage } from './image'
 import type { ImageCompressionPreset } from '../image-compress/types'
 

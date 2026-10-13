@@ -1,6 +1,6 @@
 # Project Architecture
 
-Last updated: 2026-09-04.
+Last updated: 2026-10-13.
 
 `2025-blog-public` is a personal Next.js content site. Repository Markdown, JSON, and image references are the content source; the frontend is client-rich, while specialized services handle news proxying, likes, encrypted relay transfer, and LAN signaling.
 
@@ -52,7 +52,7 @@ edge-functions/   EdgeOne transfer relay
 - Do not run package scripts unless the user explicitly requests it.
 - Keep source image assets in the sibling `2025-blog-img` repository rather than adding new images directly under this repository's `public/` directory.
 - Treat `public/blogs/word-cloud.json` as generated data, not primary content.
-- `next.config.ts` ignores TypeScript build errors, so a successful build is not proof of type correctness.
+- `next.config.ts` keeps TypeScript checking enabled for production builds; type errors block publication.
 
 ## Content And Feature Shortcuts
 

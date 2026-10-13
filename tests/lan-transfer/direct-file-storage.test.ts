@@ -45,6 +45,17 @@ describe('DirectFileStorageEngine', () => {
     expect(writes.some(value => value && typeof value === 'object' && value.type === 'write' && value.position === 2)).toBe(true)
   })
 
+  it('writes only the supplied byte range without copying its ordinary backing buffer', async () => {
+    const { writes } = setupPicker(); const engine = new DirectFileStorageEngine()
+    const backing = new Uint8Array([99, 1, 2, 99])
+    const single = { ...meta, size: 2, chunkCount: 1 }
+    await engine.prepare(single)
+    await engine.writeChunk(single, 0, backing.subarray(1, 3))
+    expect(Array.from(writes[0] as Uint8Array)).toEqual([1, 2])
+    expect((writes[0] as Uint8Array).buffer).toBe(backing.buffer)
+    expect(await engine.getManifest('f')).toMatchObject({ receivedBytes: 2, status: 'complete' })
+  })
+
   it('finalize closes the stream while cleanup aborts an unfinished stream', async () => {
     const { writable } = setupPicker(); const engine = new DirectFileStorageEngine(); await engine.prepare(meta)
     await engine.writeChunk(meta, 0, new Uint8Array([1, 2])); await engine.finalize(meta)

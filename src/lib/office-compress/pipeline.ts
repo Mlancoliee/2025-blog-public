@@ -26,7 +26,7 @@ export async function compressOffice(file: File, options: {
 	const concurrency = ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 0) >= 16 ? 2 : 1
 	const workers: (Worker | undefined)[] = []
 	let outputBytes = 0
-	const chunks: Uint8Array[] = []
+	const chunks: Uint8Array<ArrayBuffer>[] = []
 	try {
 		const entries: Entry[] = []
 		for await (const entry of reader.getEntriesGenerator({ signal })) {

@@ -144,7 +144,7 @@ export async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, mes
 
 export class ExactStreamReader {
 	private readonly reader: ReadableStreamDefaultReader<Uint8Array>
-	private buffered = new Uint8Array()
+	private buffered: Uint8Array = new Uint8Array()
 	private offset = 0
 
 	constructor(stream: ReadableStream<Uint8Array>) {

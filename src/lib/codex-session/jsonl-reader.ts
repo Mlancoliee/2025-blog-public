@@ -1,4 +1,3 @@
-import parserWebStream from 'stream-chain/jsonl/parserWebStream.js'
 import { codexRecordSchema, isObject, type RecordEnvelope } from './record-utils'
 import type { SourceRef } from './types'
 
@@ -61,11 +60,37 @@ export async function readJsonlFile(file: File, onProgress?: (progress: ReadProg
 		}
 	})
 
-	const { readable, writable } = parserWebStream<unknown>({
-		errorIndicator: (error: Error) => ({
-			__codexJsonlError: true,
-			message: error.message
-		}) satisfies JsonlErrorMarker
+	type JsonlItem = { key: number; value: unknown }
+	const decoder = new TextDecoder()
+	let fragments: string[] = []
+	let key = 0
+	const parseLine = (text: string, controller: TransformStreamDefaultController<JsonlItem>) => {
+		if (text.endsWith('\r')) text = text.slice(0, -1)
+		if (!text) return
+		let value: unknown
+		try {
+			value = JSON.parse(text)
+		} catch (error) {
+			value = { __codexJsonlError: true, message: error instanceof Error ? error.message : String(error) } satisfies JsonlErrorMarker
+		}
+		controller.enqueue({ key: key++, value })
+	}
+	const { readable, writable } = new TransformStream<Uint8Array, JsonlItem>({
+		transform(bytes, controller) {
+			const chunk = decoder.decode(bytes, { stream: true })
+			let start = 0
+			for (let end = chunk.indexOf('\n'); end !== -1; end = chunk.indexOf('\n', start)) {
+				fragments.push(chunk.slice(start, end))
+				parseLine(fragments.join(''), controller)
+				fragments = []
+				start = end + 1
+			}
+			if (start < chunk.length) fragments.push(chunk.slice(start))
+		},
+		flush(controller) {
+			fragments.push(decoder.decode())
+			parseLine(fragments.join(''), controller)
+		}
 	})
 	const pipePromise = file.slice(startOffset).stream().pipeThrough(indexer).pipeTo(writable, { signal })
 	const reader = readable.getReader()

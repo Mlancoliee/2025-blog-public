@@ -52,6 +52,7 @@ Signaling or Presence loss suspends negotiation/recovery timers and preserves a 
 - Explicitly leaving a room forgets its secret and cleans that room's receiver records.
 - Browser `File` objects are not durable. A sender page refresh may require selecting the source again; receiver-side OPFS/IndexedDB progress is durable.
 - Direct File System Access writers remain page-scoped because browser permission/handle recovery is not portable.
+- File writers use the native DOM stream contract. Preserve byte offsets and lengths at the sink boundary; ordinary ArrayBuffer chunks remain zero-copy through the shared `arrayBufferView()` helper. WebTransport's buffered reader accepts the stream's broad Uint8Array type without extra copies.
 
 ## Pay Attention
 
@@ -60,6 +61,7 @@ Signaling or Presence loss suspends negotiation/recovery timers and preserves a 
 - Keep one candidate queue scoped to the current connection/exchange and reject stale instance traffic.
 - Do not let Presence/signaling loss destroy a viable PC, including while ICE is disconnected or a recovery deadline is pending.
 - Keep runtime persistence logic outside `connection-runtime.ts`; that file is already near the project size limit.
+- Incoming preparation already returns its `offer`; retain that prepared object directly and import `LanAttachmentReceived` from the protocol types. These corrections do not change the wire format or transfer behavior.
 - No TURN/WebSocket relay exists. Some address-family or network combinations cannot establish a direct path.
 - Never expose room secrets, derived channel keys, native tickets, or raw network addresses in logs or diagnostics.
 - Explicit TCP/QUIC benchmarks fail explicitly; only automatic routing may fall back to WebRTC.

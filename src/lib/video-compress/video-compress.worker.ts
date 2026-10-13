@@ -14,6 +14,7 @@ import {
 } from 'mediabunny'
 import { audioConversionOptions, createVideoInput, videoConversionOptions, videoErrorMessage } from './media'
 import { estimateVideoOutputBytes } from './presets'
+import { arrayBufferView } from '../array-buffer'
 import type {
 	VideoCompressionConfig,
 	VideoInspection,
@@ -28,15 +29,7 @@ import type {
 const PROGRESS_INTERVAL_MS = 350
 const TARGET_SEGMENT_BYTES = 24 * 1024 * 1024
 
-type DirectWritable = {
-	write: (data: unknown) => Promise<void>
-	close: () => Promise<void>
-	abort: (reason?: unknown) => Promise<void>
-}
-
-type WritableFileHandle = FileSystemFileHandle & {
-	createWritable: () => Promise<DirectWritable>
-}
+type DirectWritable = Pick<FileSystemWritableFileStream, 'write' | 'close' | 'abort'>
 
 type Lane = {
 	id: number
@@ -122,7 +115,7 @@ function elapsedMs(task: ActiveTask) {
 
 function createDiskBridge(directWritable: DirectWritable) {
 	return new WritableStream<StreamTargetChunk>({
-		write: chunk => directWritable.write(chunk),
+		write: chunk => directWritable.write({ ...chunk, data: arrayBufferView(chunk.data) }),
 		close: () => Promise.resolve(),
 		abort: reason => directWritable.abort(reason)
 	})
@@ -234,7 +227,7 @@ function emitProgress(task: ActiveTask, duration: number, completedDuration: num
 async function runSingle(task: ActiveTask, file: File, outputHandle: FileSystemFileHandle, config: VideoCompressionConfig) {
 	const input = createVideoInput(file)
 	try {
-		const directWritable = await (outputHandle as WritableFileHandle).createWritable()
+		const directWritable = await outputHandle.createWritable()
 		task.directWritable = directWritable
 		const target = new StreamTarget(createDiskBridge(directWritable), { chunked: true })
 		target.on('write', ({ end }) => {
@@ -388,7 +381,7 @@ async function runParallel(task: ActiveTask, file: File, inspection: VideoInspec
 	const duration = inspection.duration
 	const segments = createSegments(duration, config)
 	const audioInput = createVideoInput(file)
-	const directWritable = await (outputHandle as WritableFileHandle).createWritable()
+	const directWritable = await outputHandle.createWritable()
 	task.directWritable = directWritable
 	const target = new StreamTarget(createDiskBridge(directWritable), { chunked: true })
 	target.on('write', ({ end }) => {

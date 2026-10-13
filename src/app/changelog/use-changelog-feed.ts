@@ -62,7 +62,7 @@ export function useChangelogFeed(initialBatch: ChangelogBatch, dates: string[]) 
 			return
 		}
 		const frame = requestAnimationFrame(() => {
-			document.getElementById(targetDate)?.scrollIntoView({ behavior: 'instant', block: 'start' })
+			document.getElementById(targetDate)?.scrollIntoView({ behavior: 'instant' as ScrollBehavior, block: 'start' })
 			setTargetDate(null)
 		})
 		return () => cancelAnimationFrame(frame)

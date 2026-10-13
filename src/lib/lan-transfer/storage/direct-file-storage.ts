@@ -1,16 +1,10 @@
 import type { LanStorageEngine, TransferFileMeta, TransferManifest } from './types'
 import { addRange, type ChunkRange } from './ranges'
 import { LAN_FILE_IO_BATCH_BYTES } from '../types'
+import { arrayBufferView } from '../../array-buffer'
 
 type SaveFilePicker = (options?: { suggestedName?: string; types?: Array<{ description?: string; accept: Record<string, string[]> }> }) => Promise<FileSystemFileHandle>
-type WritableFileStream = {
-	write: (data: unknown) => Promise<void>
-	close: () => Promise<void>
-	abort: () => Promise<void>
-}
-type WritableFileHandle = FileSystemFileHandle & {
-	createWritable: () => Promise<WritableFileStream>
-}
+type WritableFileStream = Pick<FileSystemWritableFileStream, 'write' | 'close' | 'abort'>
 
 type ActiveDirectFile = {
 	fileHandle: FileSystemFileHandle
@@ -63,7 +57,7 @@ export class DirectFileStorageEngine implements LanStorageEngine {
 		if (!active.writable || active.closed) throw new Error('文件保存失败，请重新接收')
 		const firstChunkIndex = active.writeBuffer[0].chunkIndex
 		const position = firstChunkIndex * meta.chunkSize
-		const data = combineBuffers(active.writeBuffer.map(item => item.data))
+		const data = arrayBufferView(combineBuffers(active.writeBuffer.map(item => item.data)))
 		if (position === active.writePosition) await active.writable.write(data)
 		else await active.writable.write({ type: 'write', position, data })
 		active.writePosition = position + data.byteLength
@@ -90,7 +84,7 @@ export class DirectFileStorageEngine implements LanStorageEngine {
 		const fileHandle = await picker({
 			suggestedName: meta.name || 'lan-transfer-file',
 		})
-		const writable = await (fileHandle as WritableFileHandle).createWritable()
+		const writable = await fileHandle.createWritable()
 		const manifest = manifestFor(meta)
 		this.activeFiles.set(meta.id, { fileHandle, writable, manifest, closed: false, writeBuffer: [], writeBufferBytes: 0, writePosition: 0 })
 		this.manifests.set(meta.id, manifest)
