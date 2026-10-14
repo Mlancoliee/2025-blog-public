@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { orbitalisAssets } from './orbitalis-assets'
 import type { OrbitalisInput } from './orbitalis-scene'
@@ -10,6 +11,8 @@ interface AnimatedCoreProps {
 }
 
 export default function AnimatedCore({ className }: AnimatedCoreProps) {
+	const router = useRouter()
+	const rapidClicks = useRef<number[]>([])
 	const containerRef = useRef<HTMLDivElement | null>(null)
 	const input = useRef<OrbitalisInput>({ hovered: false, pointer: { x: 0, y: 0 }, activation: 0 })
 	const pointerBounds = useRef<DOMRect | null>(null)
@@ -65,7 +68,7 @@ export default function AnimatedCore({ className }: AnimatedCoreProps) {
 	return (
 		<button
 			type='button'
-			aria-label='轻触放大 Orbitalis 星球'
+			aria-label='轻触放大 Orbitalis 星球，快速点击五次进入空间站'
 			onPointerEnter={event => {
 				if (event.pointerType === 'touch') return
 				input.current.hovered = true
@@ -76,8 +79,15 @@ export default function AnimatedCore({ className }: AnimatedCoreProps) {
 			onPointerCancel={handlePointerLeave}
 			onClick={() => {
 				input.current.activation = 1
+				const now = performance.now()
+				rapidClicks.current = rapidClicks.current.filter(time => now - time <= 1500)
+				rapidClicks.current.push(now)
+				if (rapidClicks.current.length === 5) {
+					rapidClicks.current = []
+					router.push('/orbitalis')
+				}
 			}}
-			className={cn('relative block h-full w-full overflow-hidden bg-transparent focus-visible:ring-2 focus-visible:ring-brand/70 focus-visible:ring-inset focus-visible:outline-none', className)}>
+			className={cn('relative block h-full w-full touch-manipulation overflow-hidden bg-transparent select-none focus-visible:ring-2 focus-visible:ring-brand/70 focus-visible:ring-inset focus-visible:outline-none', className)}>
 			<img
 				src={orbitalisAssets.poster}
 				alt=''
