@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowLeft, LoaderCircle, Minus, Pause, Play, Plus, RotateCcw } from 'lucide-react'
+import { ArrowLeft, CircleHelp, LoaderCircle, Minus, Pause, Play, Plus, RotateCcw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { attachLunarController, type LunarState } from './lunar-controller'
 import { initialTextureState, sceneAssetUrl, TEXTURE_QUALITIES } from './scene-assets'
@@ -75,46 +75,51 @@ export default function OrbitalisClient() {
 			<header className={styles.masthead}>
 				<Link href='/' className={styles.back} aria-label='返回博客首页'><ArrowLeft size={16} />返回首页</Link>
 				<div className={styles.brand}>ORBITALIS<span>/</span>PELAGIA</div>
-				<span className={styles.mode}>{ready ? 'LIVE · 3D' : 'ORBITAL STUDY'}</span>
 			</header>
 			<div className={styles.interaction}>
-				<p className={styles.status} role='status'>{status}</p>
-				{fallback ? (
-					<button type='button' className={styles.retry} onClick={() => setAttempt(value => value + 1)}><RotateCcw size={15} />重新加载</button>
-				) : (
-					<>
-						<div className={styles.qualityRow}>
-							<div className={styles.qualities} role='group' aria-label='星球贴图清晰度'>
-								{TEXTURE_QUALITIES.map(quality => (
-									<button
-										key={quality}
-										type='button'
-										aria-pressed={texture.requested === quality}
-										disabled={!ready || !texture.supported.includes(quality)}
-										title={ready && !texture.supported.includes(quality) ? '此分辨率超出当前设备的贴图上限' : `${quality} 星球贴图`}
-										onClick={() => controller.current?.selectTextureQuality(quality)}>{quality}</button>
-								))}
-							</div>
-							<span className={styles.textureStatus} role='status'>{texture.loading && <LoaderCircle size={12} className={styles.spinner} />}{textureStatus}</span>
+				<div className={styles.qualityRow}>
+					{fallback ? (
+						<button type='button' className={styles.retry} onClick={() => setAttempt(value => value + 1)}><RotateCcw size={14} />重新加载</button>
+					) : (
+						<div className={styles.qualities} role='group' aria-label='星球贴图清晰度'>
+							{TEXTURE_QUALITIES.map(quality => (
+								<button
+									key={quality}
+									type='button'
+									aria-pressed={texture.requested === quality}
+									disabled={!ready || !texture.supported.includes(quality)}
+									title={ready && !texture.supported.includes(quality) ? '此分辨率超出当前设备的贴图上限' : `${quality} 星球贴图`}
+									onClick={() => controller.current?.selectTextureQuality(quality)}>{quality}</button>
+							))}
 						</div>
-						{texture.error && <p className={styles.error} role='alert'>{texture.error}</p>}
+					)}
+					<details className={styles.help}>
+						<summary aria-label='操作说明' title='操作说明'><CircleHelp size={14} /></summary>
+						<p id='orbitalis-instructions' className={styles.instructions}>
+							拖动星球：旋转视角<br />拖动空间站：调整轨道<br />滚轮 / 双指：缩放<br />Shift 拖动：平移<br />方向键：旋转 · Home：复位
+						</p>
+					</details>
+				</div>
+				{!fallback && (
+					<>
 						<div className={styles.controlRow}>
 							<div className={styles.controls}>
-								<button type='button' aria-pressed={state.rotating} onClick={() => controller.current?.toggleRotation()}>{state.rotating ? <Pause size={14} /> : <Play size={14} />}{state.rotating ? '暂停旋转' : '自动旋转'}</button>
+								<button type='button' aria-label={state.rotating ? '暂停旋转' : '自动旋转'} title={state.rotating ? '暂停旋转' : '自动旋转'} aria-pressed={state.rotating} disabled={!ready} onClick={() => controller.current?.toggleRotation()}>{state.rotating ? <Pause size={14} /> : <Play size={14} />}</button>
 								<span className={styles.divider} />
-								<button type='button' onClick={() => controller.current?.reset()}><RotateCcw size={15} />复位视角</button>
+								<button type='button' aria-label='复位视角' title='复位视角' disabled={!ready} onClick={() => controller.current?.reset()}><RotateCcw size={14} /></button>
 							</div>
 							<div className={`${styles.controls} ${styles.zoom}`} role='group' aria-label='缩放视角'>
-								<button type='button' aria-label='缩小视角' disabled={state.zoom <= 1} onClick={() => controller.current?.zoomOut()}><Minus size={16} /></button>
+								<button type='button' aria-label='缩小视角' title='缩小视角' disabled={!ready || state.zoom <= 1} onClick={() => controller.current?.zoomOut()}><Minus size={14} /></button>
 								<output aria-label='当前放大倍数'>{Number(state.zoom.toFixed(1))}×</output>
-								<button type='button' aria-label='放大视角' disabled={state.zoom >= 6} onClick={() => controller.current?.zoomIn()}><Plus size={16} /></button>
+								<button type='button' aria-label='放大视角' title='放大视角' disabled={!ready || state.zoom >= 6} onClick={() => controller.current?.zoomIn()}><Plus size={14} /></button>
 							</div>
 						</div>
+						<span className={styles.textureStatus} role='status'>{texture.loading && <LoaderCircle size={10} className={styles.spinner} />}{textureStatus}</span>
 					</>
 				)}
-				<p id='orbitalis-instructions' className={styles.instructions}>拖星球旋转 / 拖空间站环绕<span>·</span>滚轮 / 双指缩放<span>·</span>Shift 拖动平移</p>
+				<p className={styles.status} role='status'>{status}</p>
+				{!fallback && texture.error && <p className={styles.error} role='alert'>{texture.error}</p>}
 			</div>
-			<span className={styles.edition} aria-hidden='true'>CINEMATIC ORBITAL STUDY</span>
 		</div>
 	)
 }
