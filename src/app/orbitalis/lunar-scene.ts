@@ -182,7 +182,7 @@ export async function createLunarScene(host: HTMLElement, signal: AbortSignal, o
 		if (!Number.isSafeInteger(textureLimit) || !Number.isFinite(maxWidth) || !Number.isFinite(maxHeight) || maxWidth < 1 || maxHeight < 1) {
 			throw new Error('Unable to verify WebGL drawing-buffer limits')
 		}
-		const manifest: SceneManifest = await (await read('observatory-scene-v1.json')).json()
+		const manifest: SceneManifest = await (await read('observatory-scene-v2.json')).json()
 		signal.throwIfAborted()
 		const data = await readModel(manifest.model, read)
 		signal.throwIfAborted()
