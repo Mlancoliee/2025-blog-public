@@ -9,7 +9,7 @@
 		"generate:word-cloud": "node scripts/generate-word-cloud.cjs",
 		"prebuild": "pnpm generate:word-cloud",
 		"svg": "node scripts/gen-svgs-index.js",
-		"build": "node --require ./scripts/suppress-baseline-warning.cjs ./node_modules/next/dist/bin/next build --turbopack && node scripts/prepare-edgeone-prefetch.mjs",
+		"build": "node --require ./scripts/suppress-baseline-warning.cjs ./node_modules/next/dist/bin/next build --turbopack",
 		"start": "next start -p 2025",
 		"test": "vitest run",
 		"test:coverage": "vitest run --coverage",
