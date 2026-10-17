@@ -10,7 +10,9 @@ import {
 	encodeTextPayload,
 	encryptTransferChunk
 } from './transfer-crypto'
+import { createRelayDownloadStorage, type RelayDownloadStorage } from './transfer-download-storage'
 import {
+	TRANSFER_FILE_LIMIT_LABEL,
 	TRANSFER_LIMITS,
 	TRANSFER_UPLOAD_CONTENT_TYPE,
 	type TransferChunkMeta,
@@ -57,6 +59,7 @@ type OpenRelayOptions = {
 	password: string
 	metaUrl: string
 	openUrl: string
+	signal?: AbortSignal
 	onStatus?: StatusSink
 }
 
@@ -75,6 +78,7 @@ export type OpenedRelayFile = {
 	size: number
 	url: string
 	isImage: boolean
+	dispose: () => Promise<void>
 }
 
 export type OpenedRelayTransfer = { text: string; file?: never } | { text?: never; file: OpenedRelayFile }
@@ -173,7 +177,7 @@ function preparePayload(options: CreateRelayOptions): PreparedPayload {
 	if (!file) throw new Error('请先选择文件')
 	if (file.size <= 0) throw new Error('请选择非空文件')
 	const fileLimitBytes = options.fileLimitBytes ?? TRANSFER_LIMITS.maxFileBytes
-	if (file.size > fileLimitBytes) throw new Error(options.fileTooLargeMessage || '公网中转最多支持 200MB，大文件请使用局域网互传')
+	if (file.size > fileLimitBytes) throw new Error(options.fileTooLargeMessage || `公网中转最多支持 ${TRANSFER_FILE_LIMIT_LABEL}，大文件请使用局域网互传`)
 	return {
 		kind: 'file',
 		name: file.name || 'transfer-file',
@@ -244,35 +248,45 @@ function sortOpenChunks(opened: TransferOpenResponse) {
 	return chunks
 }
 
-async function openChunkManifest(response: Response, password: string, meta: TransferPublicMeta, onStatus?: StatusSink): Promise<OpenedRelayTransfer> {
+async function openChunkManifest(response: Response, key: CryptoKey, storage: RelayDownloadStorage | null, onStatus?: StatusSink, signal?: AbortSignal): Promise<OpenedRelayTransfer> {
 	const opened = (await response.json()) as TransferOpenResponse
 	const chunks = sortOpenChunks(opened)
-	const { key } = await deriveTransferProof(password, meta)
 	const parts: Uint8Array[] = []
 
 	for (const chunk of chunks) {
+		signal?.throwIfAborted()
 		const displayIndex = chunk.index + 1
 		onStatus?.(`正在下载分片 ${displayIndex} / ${chunks.length}`)
-		const chunkResponse = await fetch(chunk.url)
+		const chunkResponse = await fetch(chunk.url, { signal })
 		if (!chunkResponse.ok) throw new Error(`第 ${displayIndex} 个分片下载失败，请重新读取`)
 
-		onStatus?.(`正在本地合并/解密 ${displayIndex} / ${chunks.length}`)
+		onStatus?.(`正在解密${storage ? '并保存' : ''}分片 ${displayIndex} / ${chunks.length}`)
+		let plain: Uint8Array
 		try {
-			parts.push(await decryptTransferChunk(await chunkResponse.arrayBuffer(), key, chunk.iv))
+			plain = await decryptTransferChunk(await chunkResponse.arrayBuffer(), key, chunk.iv)
 		} catch {
 			throw new Error('密码不正确或文件分片已损坏')
 		}
+		if (storage) await storage.write(plain)
+		else parts.push(plain)
 	}
 
-	onStatus?.('正在本地合并/解密')
+	onStatus?.('正在准备下载文件')
 	if (opened.kind === 'text') return { text: decodeTextPayload(concatBytes(parts)) }
 	const contentType = opened.contentType || 'application/octet-stream'
+	const blob = storage ? await storage.finish(contentType) : new Blob(parts.map(bytesToArrayBuffer), { type: contentType })
+	signal?.throwIfAborted()
+	const url = URL.createObjectURL(blob)
 	const file: OpenedRelayFile = {
 		name: opened.name || 'transfer-file',
 		contentType,
 		size: opened.size,
-		url: URL.createObjectURL(new Blob(parts.map(bytesToArrayBuffer), { type: contentType })),
-		isImage: contentType.toLowerCase().startsWith('image/')
+		url,
+		isImage: contentType.toLowerCase().startsWith('image/'),
+		async dispose() {
+			URL.revokeObjectURL(url)
+			await storage?.dispose()
+		}
 	}
 	if (!file.isImage) downloadObjectUrl(file.name, file.url)
 	return { file }
@@ -280,20 +294,31 @@ async function openChunkManifest(response: Response, password: string, meta: Tra
 
 export async function openRelayTransfer(options: OpenRelayOptions) {
 	options.onStatus?.('正在读取元信息...')
-	const meta = await fetchTransferJson<TransferPublicMeta>(options.metaUrl)
+	const meta = await fetchTransferJson<TransferPublicMeta>(options.metaUrl, { signal: options.signal })
 	if (meta.status !== 'ready') throw new Error('密文还在上传中，请稍后再试')
 
 	options.onStatus?.('正在校验密码...')
-	const { proof } = await deriveTransferProof(options.password, meta)
-	const response = await fetch(options.openUrl, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ code: options.code, proof })
-	})
-	if (!response.ok) throw new Error(await readTransferApiError(response))
+	const { proof, key } = await deriveTransferProof(options.password, meta)
+	options.signal?.throwIfAborted()
+	// Reserve local storage before the one-time open request consumes the transfer code.
+	if (meta.kind === 'file' && meta.size > TRANSFER_LIMITS.memoryFileBytes) options.onStatus?.('正在准备大文件存储...')
+	const storage = meta.kind === 'file' && meta.size > TRANSFER_LIMITS.memoryFileBytes ? await createRelayDownloadStorage(meta.size) : null
+	try {
+		options.signal?.throwIfAborted()
+		const response = await fetch(options.openUrl, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ code: options.code, proof }),
+			signal: options.signal
+		})
+		if (!response.ok) throw new Error(await readTransferApiError(response))
 
-	const opened = await openChunkManifest(response, options.password, meta, options.onStatus)
-	if ('file' in opened && opened.file) options.onStatus?.(opened.file.isImage ? '图片读取成功，提取入口已销毁' : '文件已开始下载，提取入口已销毁，下载链接短时有效')
-	else options.onStatus?.('读取成功，提取入口已销毁')
-	return opened
+		const opened = await openChunkManifest(response, key, storage, options.onStatus, options.signal)
+		if ('file' in opened && opened.file) options.onStatus?.(opened.file.isImage ? '图片读取成功，提取入口已销毁' : '文件已开始下载，提取入口已销毁，下载链接短时有效')
+		else options.onStatus?.('读取成功，提取入口已销毁')
+		return opened
+	} catch (error) {
+		await storage?.dispose()
+		throw error
+	}
 }

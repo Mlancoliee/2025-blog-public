@@ -9,10 +9,10 @@ const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000
 const LIMITS = {
 	publicRelayChunkBytes: 4 * 1024 * 1024,
 	maxTextBytes: 4 * 1024 * 1024,
-	maxFileBytes: 200 * 1024 * 1024,
+	maxFileBytes: 800 * 1024 * 1024,
 	maxCreatePerIpPerDay: 20,
-	uploadUrlSeconds: 10 * 60,
-	downloadUrlSeconds: 30 * 60,
+	uploadUrlSeconds: 60 * 60,
+	downloadUrlSeconds: 60 * 60,
 	statsTopLimit: 50,
 	statsMaxTopLimit: 200,
 	statsMetadataBatchSize: 10

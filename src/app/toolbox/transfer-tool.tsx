@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type ClipboardEvent } from 'react'
+import { useEffect, useRef, useState, type ClipboardEvent } from 'react'
 import { Copy, Download, Globe2, Image as ImageIcon, Link as LinkIcon, Network, QrCode, Send, UploadCloud, X } from 'lucide-react'
 import * as QRCode from 'qrcode'
 import { toast } from 'sonner'
@@ -8,6 +8,7 @@ import { LanTransferTool } from './lan-transfer-tool'
 import { createRelayTransfer, openRelayTransfer, type OpenedRelayFile } from '@/lib/transfer-relay'
 import {
 	TRANSFER_CODE_PATTERN,
+	TRANSFER_FILE_LIMIT_LABEL,
 	TRANSFER_LIMITS,
 	type TransferCreateResponse,
 	type TransferKind
@@ -26,7 +27,7 @@ const expireFormatter = new Intl.DateTimeFormat('zh-CN', {
 })
 const transferApiBase = (process.env.NEXT_PUBLIC_TRANSFER_API_BASE || '').replace(/\/+$/, '')
 const contentLimitLabel = '4MB'
-const fileLimitLabel = '200MB'
+const fileLimitLabel = TRANSFER_FILE_LIMIT_LABEL
 
 function normalizeCode(value: string) {
 	return value.trim().toUpperCase()
@@ -93,7 +94,9 @@ export function TransferTool({ initialCode = '' }: TransferToolProps) {
 	const [openedFile, setOpenedFile] = useState<OpenedRelayFile | null>(null)
 	const [status, setStatus] = useState('')
 	const [busy, setBusy] = useState(false)
+	const receiveController = useRef<AbortController | null>(null)
 	const isCodeEntry = Boolean(normalizeCode(initialCode))
+	useEffect(() => () => receiveController.current?.abort(), [])
 
 	useEffect(() => {
 		const code = normalizeCode(initialCode)
@@ -125,7 +128,7 @@ export function TransferTool({ initialCode = '' }: TransferToolProps) {
 
 	useEffect(() => {
 		return () => {
-			if (openedFile) URL.revokeObjectURL(openedFile.url)
+			void openedFile?.dispose()
 		}
 	}, [openedFile])
 
@@ -209,15 +212,22 @@ export function TransferTool({ initialCode = '' }: TransferToolProps) {
 		setBusy(true)
 		setOpenedText('')
 		setOpenedFile(null)
+		const controller = new AbortController()
+		receiveController.current = controller
 		try {
 			const metaUrl = `${transferApiUrl('meta')}?code=${encodeURIComponent(code)}`
 			const openUrl = transferApiUrl('open')
-			const opened = await openRelayTransfer({ code, password: openPassword, metaUrl, openUrl, onStatus: setStatus })
+			const opened = await openRelayTransfer({ code, password: openPassword, metaUrl, openUrl, signal: controller.signal, onStatus: setStatus })
+			if (controller.signal.aborted) {
+				await opened.file?.dispose()
+				return
+			}
 			if ('file' in opened && opened.file) setOpenedFile(opened.file)
 			else if ('text' in opened) setOpenedText(opened.text)
 		} catch (error) {
-			setStatus(error instanceof Error ? error.message : '读取失败')
+			if (!controller.signal.aborted) setStatus(error instanceof Error ? error.message : '读取失败')
 		} finally {
+			receiveController.current = null
 			setBusy(false)
 		}
 	}

@@ -6,10 +6,13 @@ export const TRANSFER_LIMITS = {
 	minPasswordLength: 6,
 	publicRelayChunkBytes: 4 * 1024 * 1024,
 	maxTextBytes: 4 * 1024 * 1024,
-	maxFileBytes: 200 * 1024 * 1024,
+	maxFileBytes: 800 * 1024 * 1024,
+	memoryFileBytes: 200 * 1024 * 1024,
 	maxCreatePerIpPerDay: 20,
-	uploadUrlSeconds: 10 * 60
+	uploadUrlSeconds: 60 * 60
 } as const
+
+export const TRANSFER_FILE_LIMIT_LABEL = `${TRANSFER_LIMITS.maxFileBytes / 1024 / 1024}MB`
 
 export type TransferKind = 'text' | 'file'
 export type TransferStatus = 'pending' | 'ready'
