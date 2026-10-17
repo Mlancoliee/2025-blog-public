@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, BarChart3, Database, KeyRound, RefreshCw, Trash2 } from 'lucide-react'
-import type { TransferCleanupResponse, TransferErrorBody, TransferStatsObjectType, TransferStatsResponse } from '@/lib/transfer-types'
+import { mergeTransferStats } from '@/lib/transfer-stats'
+import type { TransferCleanupResponse, TransferErrorBody, TransferStatsObjectType, TransferStatsResponse, TransferStatsSnapshot } from '@/lib/transfer-types'
 
 const transferApiBase = (process.env.NEXT_PUBLIC_TRANSFER_API_BASE || '').replace(/\/+$/, '')
 const typeLabels: Record<TransferStatsObjectType, string> = {
@@ -43,28 +44,52 @@ async function readStatsError(response: Response) {
 export function TransferStatusClient() {
 	const [password, setPassword] = useState('')
 	const [topLimit, setTopLimit] = useState(50)
-	const [stats, setStats] = useState<TransferStatsResponse | null>(null)
+	const [stats, setStats] = useState<TransferStatsSnapshot | null>(null)
 	const [cleanup, setCleanup] = useState<TransferCleanupResponse | null>(null)
 	const [status, setStatus] = useState('')
 	const [busy, setBusy] = useState(false)
 	const [cleanupBusy, setCleanupBusy] = useState(false)
+	const statsRequest = useRef<AbortController | null>(null)
+
+	useEffect(() => () => statsRequest.current?.abort(), [])
 
 	const loadStats = async () => {
+		if (statsRequest.current || cleanupBusy || !password) return
+		const controller = new AbortController()
+		statsRequest.current = controller
 		setBusy(true)
-		setStatus('')
+		setStats(null)
+		setStatus('正在查询存储状态...')
+		let snapshot: TransferStatsSnapshot | null = null
 		try {
-			const response = await fetch(transferApiUrl('stats'), {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ password, topLimit })
-			})
-			if (!response.ok) throw new Error(await readStatsError(response))
-			setStats((await response.json()) as TransferStatsResponse)
-			setStatus('状态已刷新')
+			let cursor: string | null = null
+			do {
+				const response = await fetch(transferApiUrl('stats'), {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ password, topLimit, cursor }),
+					signal: controller.signal
+				})
+				if (!response.ok) throw new Error(await readStatsError(response))
+				const page = (await response.json()) as TransferStatsResponse
+				controller.signal.throwIfAborted()
+				if (page.cursor && page.cursor === cursor) throw new Error('分页查询未前进，请刷新后重试')
+				snapshot = mergeTransferStats(snapshot, page, topLimit)
+				cursor = page.cursor
+				setStats(snapshot)
+				setStatus(
+					cursor
+						? `正在查询：已扫描 ${snapshot.objectCount} 个对象，读取失败 ${snapshot.metadataErrorCount} 个...`
+						: snapshot.complete
+							? `统计完成：共 ${snapshot.objectCount} 个对象`
+							: `统计不完整：${snapshot.metadataErrorCount} 个对象读取失败，占用仅包含成功读取的对象`
+				)
+			} while (cursor)
 		} catch (error) {
-			setStatus(error instanceof Error ? error.message : '读取状态失败')
+			if (!controller.signal.aborted) setStatus(`统计中断：${error instanceof Error ? error.message : '读取状态失败'}${snapshot ? '，当前仅显示已统计结果' : ''}`)
 		} finally {
-			setBusy(false)
+			statsRequest.current = null
+			if (!controller.signal.aborted) setBusy(false)
 		}
 	}
 
@@ -110,6 +135,7 @@ export function TransferStatusClient() {
 					<KeyRound className='text-secondary absolute top-1/2 left-3 -translate-y-1/2' size={16} />
 					<input
 						type='password'
+						disabled={busy || cleanupBusy}
 						value={password}
 						onChange={event => setPassword(event.target.value)}
 						onKeyDown={event => {
@@ -121,12 +147,15 @@ export function TransferStatusClient() {
 				</label>
 				<input
 					type='number'
+					disabled={busy || cleanupBusy}
 					min={0}
 					max={200}
+					step={1}
 					value={topLimit}
-					onChange={event => setTopLimit(Math.max(0, Math.min(200, Number(event.target.value) || 0)))}
+					onChange={event => setTopLimit(Math.max(0, Math.min(200, Math.floor(Number(event.target.value) || 0))))}
 					className='w-full rounded-2xl border border-border bg-article px-4 py-3 text-sm'
-					aria-label='最大对象条数'
+					aria-label='最大对象显示条数（不影响扫描范围）'
+					title='仅控制明细显示条数，统计会扫描全部对象'
 				/>
 				<button disabled={busy || cleanupBusy || !password} onClick={() => void loadStats()} className='bg-brand text-background flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold disabled:opacity-50'>
 					<RefreshCw size={16} className={busy ? 'animate-spin' : ''} />
@@ -155,7 +184,7 @@ export function TransferStatusClient() {
 				</button>
 			</section>
 
-			{status && <p className='text-secondary rounded-2xl border border-border bg-article px-4 py-3 text-sm'>{status}</p>}
+			{status && <p role='status' className='text-secondary rounded-2xl border border-border bg-article px-4 py-3 text-sm'>{status}</p>}
 
 			{stats && (
 				<>
@@ -170,14 +199,14 @@ export function TransferStatusClient() {
 						<div className='rounded-2xl border border-border bg-background/30 p-5'>
 							<div className='text-secondary flex items-center gap-2 text-xs'>
 								<BarChart3 size={15} />
-								总占用
+								{stats.complete ? '总占用' : '已统计占用（非完整总量）'}
 							</div>
 							<p className='mt-3 text-xl font-semibold'>{formatBytes(stats.totalBytes)}</p>
 						</div>
 						<div className='rounded-2xl border border-border bg-background/30 p-5'>
 							<div className='text-secondary flex items-center gap-2 text-xs'>
 								<BarChart3 size={15} />
-								对象数量
+								{stats.complete ? '对象数量' : '已扫描对象'}
 							</div>
 							<p className='mt-3 text-xl font-semibold'>{stats.objectCount}</p>
 						</div>
@@ -185,7 +214,7 @@ export function TransferStatusClient() {
 
 					<section className='grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]'>
 						<div className='space-y-3 rounded-2xl border border-border bg-background/30 p-5'>
-							<h2 className='font-semibold'>分类占用</h2>
+							<h2 className='font-semibold'>{stats.complete ? '分类占用' : '已统计分类占用'}</h2>
 							{typeRows.length ? (
 								<div className='space-y-3'>
 									{typeRows.map(([type, item]) => (
@@ -209,7 +238,7 @@ export function TransferStatusClient() {
 						<div className='min-w-0 rounded-2xl border border-border bg-background/30 p-5'>
 							<div className='mb-4 flex flex-wrap items-center justify-between gap-3'>
 								<h2 className='font-semibold'>最大对象</h2>
-								<p className='text-secondary text-xs'>最多显示 {topLimit} 条</p>
+								<p className='text-secondary text-xs'>已显示 {stats.top.length} 条，按大小排序</p>
 							</div>
 							<div className='overflow-x-auto'>
 								<table className='w-full min-w-[720px] text-left text-sm'>
@@ -233,7 +262,7 @@ export function TransferStatusClient() {
 										{!stats.top.length && (
 											<tr>
 												<td colSpan={4} className='text-secondary py-6 text-center'>
-													暂无对象
+													{stats.objectCount ? '暂无可显示的对象明细' : '暂无对象'}
 												</td>
 											</tr>
 										)}
@@ -249,6 +278,7 @@ export function TransferStatusClient() {
 								<AlertTriangle size={16} />
 								Metadata 读取失败：{stats.metadataErrorCount}
 							</div>
+							<p className='text-secondary text-sm'>占用仅包含成功读取的对象，当前统计不完整。最多展示 200 条错误。</p>
 							<div className='space-y-2'>
 								{stats.errors.map(error => (
 									<p key={error.key} className='text-secondary break-all rounded-xl border border-border bg-article px-3 py-2 text-xs'>

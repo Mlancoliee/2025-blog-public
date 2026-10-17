@@ -1,3 +1,7 @@
+// Leave room in the 64-fetch budget for SDK credentials and listing.
+const STATS_PAGE_SIZE = 20
+const STATS_METADATA_BATCH_SIZE = 8
+
 function classifyTransferObject(key) {
 	if (/\/chunks\/part-\d+\.bin$/.test(key)) return 'chunk'
 	if (key.endsWith('/meta.json')) return 'meta'
@@ -29,24 +33,27 @@ export async function collectTransferStats(input, context) {
 	await assertTransferAdminPassword(input, context)
 	const store = await context.getTransferStore(context.env)
 	const topLimit = normalizeTopLimit(input?.topLimit, context.limits)
-	const { blobs } = await store.list({ prefix: 'transfer/', consistency: 'strong' })
+	const { blobs, cursor } = await store.list({ prefix: 'transfer/', consistency: 'strong', limit: STATS_PAGE_SIZE, paginate: false, cursor: input?.cursor || undefined })
 	const rows = []
 	const errors = []
 	const byType = {}
 	let totalBytes = 0
 
-	for (let index = 0; index < blobs.length; index += context.limits.statsMetadataBatchSize) {
-		const batch = blobs.slice(index, index + context.limits.statsMetadataBatchSize)
+	for (let index = 0; index < blobs.length; index += STATS_METADATA_BATCH_SIZE) {
+		const batch = blobs.slice(index, index + STATS_METADATA_BATCH_SIZE)
 		const details = await Promise.all(
 			batch.map(async blob => {
 				const type = classifyTransferObject(blob.key)
 				try {
 					const metadata = await store.getMetadata(blob.key, { consistency: 'strong' })
-					const bytes = Number(metadata?.headers?.['content-length'] || 0)
+					if (!metadata) throw new Error('Object no longer exists; refresh the statistics')
+					const contentLength = metadata.headers?.['content-length']
+					const bytes = Number(contentLength)
+					if (contentLength == null || contentLength === '' || !Number.isSafeInteger(bytes) || bytes < 0) throw new Error('Missing or invalid object size')
 					return {
 						key: blob.key,
 						type,
-						bytes: Number.isFinite(bytes) ? bytes : 0,
+						bytes,
 						contentType: metadata?.contentType || '',
 						etag: metadata?.etag || blob.etag || ''
 					}
@@ -82,11 +89,12 @@ export async function collectTransferStats(input, context) {
 		ok: true,
 		generatedAt: Date.now(),
 		store: context.transferStoreName(context.env),
+		cursor: cursor || null,
 		objectCount: rows.length,
 		totalBytes,
 		byType,
 		metadataErrorCount: errors.length,
-		errors: errors.slice(0, topLimit),
+		errors,
 		top
 	}
 }

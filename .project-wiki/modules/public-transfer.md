@@ -12,6 +12,7 @@ Owns the password-protected EdgeOne relay at `/t`, including encrypted chunk lif
 | `src/lib/transfer-crypto.ts` | Browser encryption/key derivation. |
 | `src/lib/transfer-relay.ts` | Relay client flow. |
 | `src/lib/transfer-download-storage.ts` | Browser-private disk storage and temporary-file cleanup for large downloads. |
+| `src/lib/transfer-stats.ts` | Merge paginated admin statistics and retain global largest objects. |
 | `edge-functions/api/transfer/` | Create, complete, meta, open, stats, cleanup API. |
 | `edgeone.json` | Daily cleanup schedule. |
 
@@ -29,4 +30,6 @@ Browser derives AES-GCM key from password, encrypts chunks, asks EdgeOne for upl
 - Do not add a silent Next/Netlify fallback; `NEXT_PUBLIC_TRANSFER_API_BASE` is required.
 - `complete` must not HEAD every chunk; missing objects surface at recipient download.
 - Cleanup is daily 02:00 Asia/Shanghai; stats/manual cleanup require the protected admin-password hash.
+- Admin statistics use separate HTTP requests with Blob `list({ limit: 20, paginate: false, cursor })` and at most eight concurrent metadata reads. Do not scan all metadata in one Edge Function invocation: its Fetch API permits only 64 outgoing requests, including SDK credential exchange and listing. The UI's 0–200 limit controls displayed largest objects, not scan scope.
+- The status client merges counts, known bytes, errors and the global largest objects across pages, shows scan progress and aborts on unmount. Only a finished scan without metadata errors may show a complete total; missing/invalid object sizes and interrupted scans must remain visibly incomplete. Blob listings are live rather than a transaction snapshot, so concurrent uploads/deletes can change results while scanning.
 - Preserve manifest, PBKDF2, IV, and consume-on-open semantics.

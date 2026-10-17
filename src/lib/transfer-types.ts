@@ -103,12 +103,17 @@ export type TransferStatsResponse = {
 	ok: true
 	generatedAt: number
 	store: string
+	cursor: string | null
 	objectCount: number
 	totalBytes: number
 	byType: Partial<Record<TransferStatsObjectType, { count: number; bytes: number }>>
 	metadataErrorCount: number
 	errors: Array<{ key: string; type: TransferStatsObjectType; message: string }>
 	top: TransferStatsObject[]
+}
+
+export type TransferStatsSnapshot = Omit<TransferStatsResponse, 'cursor'> & {
+	complete: boolean
 }
 
 export type TransferCleanupResponse = {
