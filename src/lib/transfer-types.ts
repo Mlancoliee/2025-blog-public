@@ -118,6 +118,8 @@ export type TransferStatsSnapshot = Omit<TransferStatsResponse, 'cursor'> & {
 
 export type TransferCleanupResponse = {
 	ok: true
+	cursor: string | null
+	complete: boolean
 	cleaned: number
 	scanned: number
 	deleteErrorCount: number

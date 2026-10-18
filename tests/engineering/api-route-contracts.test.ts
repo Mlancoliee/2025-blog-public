@@ -25,6 +25,6 @@ describe('API/route contracts', () => {
   it('EdgeOne cleanup schedule remains explicit and reviewable even if deployment source is packaged separately', () => {
     const config = read('edgeone.json')
     expect(config).toMatch(/transfer-cleanup/)
-    expect(config).toMatch(/\/api\/transfer\/cleanup/)
+    expect(config).toMatch(/\/api\/transfer-cleanup/)
   })
 })

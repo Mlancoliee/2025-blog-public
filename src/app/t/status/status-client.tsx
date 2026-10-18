@@ -49,14 +49,14 @@ export function TransferStatusClient() {
 	const [status, setStatus] = useState('')
 	const [busy, setBusy] = useState(false)
 	const [cleanupBusy, setCleanupBusy] = useState(false)
-	const statsRequest = useRef<AbortController | null>(null)
+	const activeRequest = useRef<AbortController | null>(null)
 
-	useEffect(() => () => statsRequest.current?.abort(), [])
+	useEffect(() => () => activeRequest.current?.abort(), [])
 
 	const loadStats = async () => {
-		if (statsRequest.current || cleanupBusy || !password) return
+		if (activeRequest.current || cleanupBusy || !password) return
 		const controller = new AbortController()
-		statsRequest.current = controller
+		activeRequest.current = controller
 		setBusy(true)
 		setStats(null)
 		setStatus('正在查询存储状态...')
@@ -88,30 +88,50 @@ export function TransferStatusClient() {
 		} catch (error) {
 			if (!controller.signal.aborted) setStatus(`统计中断：${error instanceof Error ? error.message : '读取状态失败'}${snapshot ? '，当前仅显示已统计结果' : ''}`)
 		} finally {
-			statsRequest.current = null
+			activeRequest.current = null
 			if (!controller.signal.aborted) setBusy(false)
 		}
 	}
 
 	const runCleanup = async () => {
+		if (activeRequest.current || !password) return
 		if (!window.confirm('确定清理所有公网中转对象吗？当前未读取的中转内容也会失效。')) return
+		const controller = new AbortController()
+		activeRequest.current = controller
 		setCleanupBusy(true)
-		setStatus('')
+		setStats(null)
+		setCleanup(null)
+		setStatus('正在清理存储对象...')
+		let result: TransferCleanupResponse = { ok: true, cursor: null, complete: false, scanned: 0, cleaned: 0, deleteErrorCount: 0, errors: [] }
 		try {
-			const response = await fetch(transferApiUrl('cleanup'), {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ password })
-			})
-			if (!response.ok) throw new Error(await readStatsError(response))
-			const result = (await response.json()) as TransferCleanupResponse
-			setCleanup(result)
-			setStats(null)
-			setStatus(`清理完成：扫描 ${result.scanned} 个对象，删除 ${result.cleaned} 个对象`)
+			do {
+				const response = await fetch(transferApiUrl('cleanup'), {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ password, cursor: result.cursor }),
+					signal: controller.signal
+				})
+				if (!response.ok) throw new Error(await readStatsError(response))
+				const page = (await response.json()) as TransferCleanupResponse
+				controller.signal.throwIfAborted()
+				if (page.cursor && page.cursor === result.cursor) throw new Error('清理分页未前进，请重试')
+				const deleteErrorCount: number = result.deleteErrorCount + page.deleteErrorCount
+				result = {
+					...page,
+					cleaned: result.cleaned + page.cleaned,
+					scanned: result.scanned + page.scanned,
+					deleteErrorCount,
+					errors: [...result.errors, ...page.errors].slice(0, 50),
+					complete: !page.cursor && deleteErrorCount === 0
+				}
+				setCleanup(result)
+				setStatus(`${result.cursor ? '清理中' : result.complete ? '清理完成' : '清理不完整'}：扫描 ${result.scanned} 个对象，删除 ${result.cleaned} 个，失败 ${result.deleteErrorCount} 个${!result.cursor && !result.complete ? '，可再次清理重试剩余对象' : ''}`)
+			} while (result.cursor)
 		} catch (error) {
-			setStatus(error instanceof Error ? error.message : '清理失败')
+			if (!controller.signal.aborted) setStatus(`清理中断：${error instanceof Error ? error.message : '清理失败'}，已确认删除 ${result.cleaned} 个对象，可再次清理继续`)
 		} finally {
-			setCleanupBusy(false)
+			activeRequest.current = null
+			if (!controller.signal.aborted) setCleanupBusy(false)
 		}
 	}
 
@@ -167,7 +187,7 @@ export function TransferStatusClient() {
 				<div className='space-y-1'>
 					<h2 className='font-semibold'>管理员清理</h2>
 					<p className='text-secondary text-sm'>立即清理 Blob 里的公网中转对象。北京 02 点定时清理仍然保留。</p>
-					{cleanup && <p className='text-secondary text-xs'>上次清理：扫描 {cleanup.scanned}，删除 {cleanup.cleaned}，失败 {cleanup.deleteErrorCount}</p>}
+					{cleanup && <p className='text-secondary text-xs'>{cleanupBusy ? '清理中' : cleanup.complete ? '清理已完成' : '清理未完成'}：扫描 {cleanup.scanned}，删除 {cleanup.cleaned}，失败 {cleanup.deleteErrorCount}</p>}
 					{cleanup?.deleteErrorCount ? (
 						<div className='space-y-1 pt-1'>
 							{cleanup.errors.map(error => (

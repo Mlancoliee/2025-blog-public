@@ -13,7 +13,7 @@ Contains the cross-module stack, repository map, build/deployment setup, externa
 | `next.config.ts`, `tsconfig.json` | Next/browser aliases, redirects, TypeScript behavior. |
 | `netlify.toml` | Netlify build, Node version, plugin, cache headers. |
 | `edgeone.json` | Relay cleanup schedule. |
-| `supabase/`, `edge-functions/` | Likes and public relay backends. |
+| `supabase/`, `edge-functions/`, `cloud-functions/` | Likes, public relay APIs, and the Node.js scheduled cleanup worker. |
 | `scripts/`, `tests/`, `vitest.config.ts` | Generated artifacts and unified Vitest suites (`tests/**`). |
 
 ## Main Architecture
@@ -27,6 +27,7 @@ Next.js 16 + React 19 + TypeScript/Tailwind deliver the public site. Markdown/JS
 - Do not run package scripts for verification unless explicitly requested.
 - `predev`/`prebuild` generate word cloud; `svg` regenerates SVG index. Treat generated output as non-primary source.
 - Netlify is the checked-in deployment path: Node 22, `pnpm run build`, `.next`, Next plugin; EdgeOne cleanup runs 02:00 Asia/Shanghai.
+- EdgeOne's daily cleanup schedule targets the Node.js Cloud Function `/api/transfer-cleanup`, not the paginated manual Edge endpoint `/api/transfer/cleanup`. The Node runtime reuses the existing Blob deploy credential; `cloudFunctions.nodejs.maxDuration` is 120 seconds. Keep both function directories in EdgeOne deployments and report incomplete scheduled runs as failures rather than HTTP 200 successes. See [Public transfer](./public-transfer.md) for page and authorization boundaries.
 - `/healthz` is the no-store 204 probe; use it instead of a rendered home page for origin checks.
 - `next.config.ts` explicitly sets `typescript.ignoreBuildErrors: false`; production builds fail on TypeScript errors. A successful build still does not replace browser or business-flow acceptance.
 - Next `16.3.8` and TypeScript `5.9.3` are pinned for the current build. TypeScript distinguishes ordinary and shared byte backing memory; `src/lib/array-buffer.ts` preserves ordinary views without copying and supplies ordinary memory for DOM file sinks.

@@ -1,4 +1,5 @@
 import { assertTransferAdminPassword, collectTransferStats } from './admin.js'
+import { cleanupTransferPage } from './cleanup.js'
 import { createDownloadUrl } from './cos-download-url.js'
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -14,8 +15,7 @@ const LIMITS = {
 	uploadUrlSeconds: 60 * 60,
 	downloadUrlSeconds: 60 * 60,
 	statsTopLimit: 50,
-	statsMaxTopLimit: 200,
-	statsMetadataBatchSize: 10
+	statsMaxTopLimit: 200
 }
 
 class TransferError extends Error {
@@ -76,14 +76,6 @@ async function readJson(request) {
 		return await request.json()
 	} catch {
 		throw new TransferError(400, 'invalid_json', 'Invalid JSON body')
-	}
-}
-
-async function readOptionalJson(request) {
-	try {
-		return await request.json()
-	} catch {
-		return {}
 	}
 }
 
@@ -160,10 +152,6 @@ function getNextBeijingCleanupAt(now = Date.now()) {
 	let cleanupAt = Date.UTC(y, m, d, 2, 0, 0, 0) - BEIJING_OFFSET_MS
 	if (cleanupAt <= now) cleanupAt += 24 * 60 * 60 * 1000
 	return cleanupAt
-}
-
-function isBeijingCleanupWindow(now = Date.now()) {
-	return new Date(now + BEIJING_OFFSET_MS).getUTCHours() === 2
 }
 
 function keySet(id, code, expireAt) {
@@ -257,15 +245,10 @@ async function readMeta(store, code) {
 	return meta
 }
 
-async function deleteTransfer(store, meta, includeExpire = true) {
-	const keys = keySet(meta.id, meta.code, meta.expireAt)
-	const deleteKeys = [keys.metaKey, keys.codeKey, ...(meta.chunks || []).map(chunk => keys.chunkKey(chunk.index))]
-	if (includeExpire) deleteKeys.push(keys.expireKey, keys.consumedKey)
-	await Promise.all(deleteKeys.map(key => store.delete(key)))
-}
-
 async function expireTransfer(store, meta) {
-	await deleteTransfer(store, meta)
+	const keys = keySet(meta.id, meta.code, meta.expireAt)
+	// Invalidate the expired entry here; bulk chunk deletion belongs to cleanup.
+	await Promise.all([keys.metaKey, keys.codeKey, keys.expireKey, keys.consumedKey].map(key => store.delete(key)))
 	throw new TransferError(410, 'expired', 'Transfer expired')
 }
 
@@ -359,43 +342,6 @@ async function openTransfer(input, env) {
 	return { ...publicMeta(meta), chunks }
 }
 
-async function cleanupExpiredTransfers(env) {
-	const store = await getTransferStore(env)
-	const { blobs } = await store.list({ prefix: 'transfer/', consistency: 'strong' })
-	let cleaned = 0
-	const errors = []
-
-	for (let index = 0; index < blobs.length; index += LIMITS.statsMetadataBatchSize) {
-		const batch = blobs.slice(index, index + LIMITS.statsMetadataBatchSize)
-		const results = await Promise.all(
-			batch.map(async blob => {
-				try {
-					await store.delete(blob.key)
-					return null
-				} catch (error) {
-					return { key: blob.key, message: compactErrorMessage(error) }
-				}
-			})
-		)
-		for (const error of results) {
-			if (error) errors.push(error)
-			else cleaned += 1
-		}
-	}
-
-	return { cleaned, scanned: blobs.length, deleteErrorCount: errors.length, errors: errors.slice(0, 50) }
-}
-
-async function assertCleanupAllowed(request, env) {
-	if (isBeijingCleanupWindow()) return
-	await assertTransferAdminPassword(await readOptionalJson(request), { env, getRequiredEnv, sha256, safeEqual, TransferError })
-}
-
-function compactErrorMessage(error) {
-	const message = error instanceof Error ? error.message : String(error)
-	return message.replace(/\s+/g, ' ').slice(0, 300)
-}
-
 function actionFromRequest(request) {
 	const match = new URL(request.url).pathname.match(/\/api\/transfer\/([^/]+)$/)
 	return match?.[1] || ''
@@ -415,8 +361,9 @@ export async function onRequest(context) {
 			return json(await openTransfer(await readJson(request), env), 200, request, env)
 		}
 		if (request.method === 'POST' && action === 'cleanup') {
-			await assertCleanupAllowed(request, env)
-			return json({ ok: true, ...(await cleanupExpiredTransfers(env)) }, 200, request, env)
+			const input = await readJson(request)
+			await assertTransferAdminPassword(input, { env, getRequiredEnv, sha256, safeEqual, TransferError })
+			return json(await cleanupTransferPage(await getTransferStore(env), input.cursor), 200, request, env)
 		}
 		throw new TransferError(404, 'not_found', 'Transfer endpoint not found')
 	} catch (error) {
