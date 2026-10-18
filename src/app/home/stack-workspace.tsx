@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { ArrowLeft, ArrowUpRight, Bold, Check, ChevronRight, Code2, Download, FileText, Hash, Italic, KeyRound, List, LockKeyhole, PanelLeftClose, PenLine, Plus, RefreshCw, Search, ShieldCheck, Star, Trash2, Undo2 } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Bold, Check, ChevronRight, Code2, Download, FileText, Hash, Italic, KeyRound, List, LockKeyhole, PanelLeftClose, PenLine, Plus, RefreshCw, Search, Star, Trash2, Undo2 } from 'lucide-react'
 import { useTimeTheme } from '@/components/time-theme-provider'
 import { getAssetUrl } from '@/lib/asset-url'
 import { WorkspaceSession } from '@/lib/stack/workspace'
@@ -103,17 +103,15 @@ function Workspace({ owner, email, dataKey, epoch, onLock, onSignOut, session }:
 		<div className={styles.shell} data-focus={focus} data-editing={!!note}>
 			<aside className={styles.sidebar} aria-label='墨栈导航'>
 				<a href='/' className={styles.brand} onClick={event => { if (dirty) { event.preventDefault(); void leave(() => { window.location.href = '/' }) } }}><span><PenLine size={23}/></span><div>墨栈<small>INKSTACK</small></div><ArrowUpRight size={14}/></a>
-				<div className={styles.spaceName}><span className={styles.avatar}>{(email[0] || 'M').toUpperCase()}</span><div><strong>我的私人空间</strong><small>{email}</small></div><ShieldCheck size={14}/></div>
+				<div className={styles.spaceName}><span className={styles.avatar}>{(email[0] || 'M').toUpperCase()}</span><span className={styles.accountEmail}>{email}</span></div>
 				<button className={styles.newNote} onClick={create} disabled={!state.loaded || state.resetRequired}><Plus size={17}/><span>新建笔记</span><PenLine size={14}/></button>
-				<p className={styles.sectionLabel}>文字空间</p>
 				<nav className={styles.navigation}>
 					<button aria-current={view === 'all' && !tag ? 'page' : undefined} onClick={() => switchView('all')}><FileText size={17}/><span>全部笔记</span><small>{activeNotes.length}</small></button>
 					<button aria-current={view === 'favorites' ? 'page' : undefined} onClick={() => switchView('favorites')}><Star size={17}/><span>我的收藏</span><small>{activeNotes.filter(item => item.content.favorite).length}</small></button>
 					<button aria-current={view === 'trash' ? 'page' : undefined} onClick={() => switchView('trash')}><Trash2 size={17}/><span>回收站</span><small>{state.notes.length - activeNotes.length}</small></button>
 				</nav>
-				<div className={styles.tagSection}><p className={styles.sectionLabel}>标签 <span>{tags.length}</span></p>{tags.length ? tags.map(value => <button key={value} aria-pressed={tag === value} onClick={() => { setTag(value); setView('all'); setSelected(null) }}><Hash size={14}/><span>{value}</span></button>) : <p className={styles.tagHint}>在笔记中添加标签<br/>让灵感更有条理</p>}</div>
+				{tags.length > 0 && <div className={styles.tagSection}><p className={styles.sectionLabel}>标签 <span>{tags.length}</span></p>{tags.map(value => <button key={value} aria-pressed={tag === value} onClick={() => { setTag(value); setView('all'); setSelected(null) }}><Hash size={14}/><span>{value}</span></button>)}</div>}
 				<div className={styles.sideBottom}>
-					<div className={styles.privateHint}><ShieldCheck size={17}/><p>文字只属于你<small>浏览器端加密 · 多端同步</small></p></div>
 					<button onClick={() => setSettings(true)}><KeyRound size={16}/><span>访问与安全</span><ChevronRight size={14}/></button>
 					<button onClick={() => void leave(onLock)}><LockKeyhole size={16}/><span>锁定空间</span></button>
 					<button className={styles.signOut} onClick={() => void leave(onSignOut)}>退出账户</button>
@@ -121,18 +119,18 @@ function Workspace({ owner, email, dataKey, epoch, onLock, onSignOut, session }:
 			</aside>
 
 			<section className={styles.listPane} aria-label='笔记列表'>
-				<header className={styles.listHeader}><div><span className={styles.eyebrow}>YOUR THOUGHTS, COLLECTED</span><h1>{tag ? `# ${tag}` : names[view]}<small>{list.length}</small></h1></div>{iconButton('同步笔记', <RefreshCw size={17}/>, () => void session.sync())}</header>
+				<header className={styles.listHeader}><h1>{tag ? `# ${tag}` : names[view]}<small>{list.length}</small></h1>{iconButton('同步笔记', <RefreshCw size={17}/>, () => void session.sync())}</header>
 				<label className={styles.search}><Search size={16}/><input ref={search} aria-label='搜索笔记' placeholder='搜索标题、正文、标签' value={query} onChange={event => setQuery(event.target.value)}/><kbd>⌘ K</kbd></label>
-				<div className={styles.listMeta}><span>{query ? '搜索结果' : '按最近编辑排序'}</span><span>私密</span></div>
+				<p className={styles.listMeta}>{query ? '搜索结果' : '按最近编辑排序'}</p>
 				<div className={styles.mobileViews}><button aria-pressed={view === 'all'} onClick={() => switchView('all')}>全部</button><button aria-pressed={view === 'favorites'} onClick={() => switchView('favorites')}>收藏</button><button aria-pressed={view === 'trash'} onClick={() => switchView('trash')}>回收站</button><button onClick={() => setSettings(true)} aria-label='访问与安全'><KeyRound size={16}/></button><button onClick={() => void leave(onLock)} aria-label='锁定空间'><LockKeyhole size={16}/></button></div>
-				<NoteList items={state.loaded ? list : []} selected={selected} onSelect={select} filter={view + ':' + tag + ':' + needle} empty={!state.loaded ? <div className={styles.listEmpty}>{state.error ? '同步中断，请重试' : '正在解密你的笔记…'}</div> : !list.length ? <div className={styles.listEmpty}><FileText size={25}/><p>{query || tag ? '没有找到相关笔记' : view === 'trash' ? '回收站是空的' : view === 'favorites' ? '收藏值得常看的文字' : '你的下一次灵感，从这里开始'}</p></div> : undefined}/>
-				<footer className={styles.listFooter}><span><ShieldCheck size={13}/>端到端加密</span><button onClick={create} disabled={!state.loaded || state.resetRequired} title='新建笔记' aria-label='新建笔记'><Plus size={18}/></button></footer>
+				<NoteList items={state.loaded ? list : []} selected={selected} onSelect={select} filter={view + ':' + tag + ':' + needle} empty={!state.loaded ? <div className={styles.listEmpty}>{state.error ? '同步中断，请重试' : '正在加载笔记…'}</div> : !list.length ? <div className={styles.listEmpty}><FileText size={25}/><p>{query || tag ? '未找到笔记' : view === 'trash' ? '回收站为空' : view === 'favorites' ? '暂无收藏' : '暂无笔记'}</p></div> : undefined}/>
+				<footer className={styles.listFooter}><button onClick={create} disabled={!state.loaded || state.resetRequired} title='新建笔记' aria-label='新建笔记'><Plus size={18}/>新建笔记</button></footer>
 			</section>
 
 			<main className={styles.editorPane}>
 				<header className={styles.editorHeader}>
-					<div className={styles.breadcrumb}>{iconButton('返回笔记列表', <ArrowLeft size={17}/>, () => { setSelected(null); setFocus(false) })}<span>私人空间</span><ChevronRight size={12}/><span>{note?.content.title.trim() || (note ? '未命名笔记' : '墨栈')}</span></div>
-					<div className={styles.editorActions}>{note && <>{iconButton('导出 Markdown', <Download size={16}/>, () => downloadText(`${note.content.title.trim().replace(/[\\/:*?"<>|]/g, '_').slice(0, 80) || '未命名笔记'}.md`, `# ${note.content.title}\n\n${note.content.body}`))}{iconButton('专注模式', <PanelLeftClose size={17}/>, () => setFocus(!focus), focus)}</>}{iconButton('锁定空间', <LockKeyhole size={16}/>, () => void leave(onLock))}</div>
+					<div className={styles.breadcrumb}>{iconButton('返回笔记列表', <ArrowLeft size={17}/>, () => { setSelected(null); setFocus(false) })}<span>{names[view]}</span>{note && <><ChevronRight size={12}/><span>{note.content.title.trim() || '未命名笔记'}</span></>}</div>
+					<div className={styles.editorActions}>{note && <>{iconButton(note.content.favorite ? '取消收藏' : '收藏笔记', <Star size={16}/>, () => session.edit(note.id, { favorite: !note.content.favorite }), note.content.favorite)}{iconButton('导出 Markdown', <Download size={16}/>, () => downloadText(`${note.content.title.trim().replace(/[\\/:*?"<>|]/g, '_').slice(0, 80) || '未命名笔记'}.md`, `# ${note.content.title}\n\n${note.content.body}`))}{iconButton('专注模式', <PanelLeftClose size={17}/>, () => setFocus(!focus), focus)}</>}{iconButton('锁定空间', <LockKeyhole size={16}/>, () => void leave(onLock))}</div>
 				</header>
 				{state.error && <div className={styles.alert} role='alert'><span>{state.error}</span><button onClick={() => downloadText('inkstack-local-notes.json', JSON.stringify({ owner, notes: state.notes.map(({ id, content }) => ({ id, content })) }, null, 2))}>导出本地文字</button><button disabled={state.busy} onClick={() => state.resetRequired ? void leave(onLock) : void session.sync()}>{state.resetRequired ? '重新解锁' : '重试'}</button></div>}
 				{conflicts.length > 0 && !note?.conflict && <div className={styles.alert}><span>{conflicts.length} 篇笔记存在版本冲突，本地内容已保留。</span><button onClick={() => setSelected(conflicts[0].id)}>查看</button></div>}
@@ -141,12 +139,11 @@ function Workspace({ owner, email, dataKey, epoch, onLock, onSignOut, session }:
 					{note.content.trashed && <div className={styles.trashBanner}><span>此笔记在回收站中，仍占用存储空间。</span><button onClick={() => session.edit(note.id, { trashed: false })}><Undo2 size={14}/>恢复</button><button onClick={() => { if (window.confirm('永久删除这篇笔记？此操作无法撤销。')) void session.remove(note.id) }}>永久删除</button></div>}
 					<div className={styles.editorScroll}>
 						<article className={styles.document}>
-							<div className={styles.documentLabel}><PenLine size={16}/><span>一点灵感，一页文字</span>{iconButton(note.content.favorite ? '取消收藏' : '收藏笔记', <Star size={16}/>, () => session.edit(note.id, { favorite: !note.content.favorite }), note.content.favorite)}</div>
 							<input className={styles.titleInput} aria-label='笔记标题' placeholder='未命名笔记' value={note.content.title} maxLength={200} readOnly={note.content.trashed} onChange={event => session.edit(note.id, { title: event.target.value })}/>
-							<div className={styles.documentMeta}><time>编辑于 {date(note.updated)}</time><span>·</span><ShieldCheck size={12}/><span>仅自己可见</span></div>
+							<time className={styles.documentMeta}>编辑于 {date(note.updated)}</time>
 							<label className={styles.tagsInput}><Hash size={14}/><input aria-label='标签，以逗号分隔' placeholder='添加标签，以逗号分隔' value={note.content.tags.join(',')} maxLength={240} readOnly={note.content.trashed} onChange={event => session.edit(note.id, { tags: event.target.value.split(/[,，]/) })} onBlur={() => { const clean = [...new Set(note.content.tags.map(value => value.trim()).filter(Boolean))]; if (JSON.stringify(clean) !== JSON.stringify(note.content.tags)) session.edit(note.id, { tags: clean }) }}/></label>
 							<div className={styles.toolbar}><div>{!preview && !note.content.trashed && <>{iconButton('加粗', <Bold size={15}/>, () => insert('**', '**'))}{iconButton('斜体', <Italic size={15}/>, () => insert('*', '*'))}{iconButton('列表', <List size={17}/>, () => insert('\n- '))}{iconButton('代码块', <Code2 size={17}/>, () => insert('\n```\n', '\n```\n'))}</>}</div><div className={styles.viewToggle}><button aria-pressed={!preview} onClick={() => setPreview(false)}>编辑</button><button aria-pressed={preview} onClick={() => setPreview(true)}>预览</button></div></div>
-							{preview ? <NotePreview body={note.content.body}/> : <textarea ref={editor} className={styles.bodyInput} aria-label='笔记正文' placeholder={'写下你的想法…\n\n支持 Markdown，标题、代码片段和待办都可以从这里开始。'} value={note.content.body} readOnly={note.content.trashed} spellCheck={false} onChange={event => session.edit(note.id, { body: event.target.value })}/>}
+							{preview ? <NotePreview body={note.content.body}/> : <textarea ref={editor} className={styles.bodyInput} aria-label='笔记正文' placeholder='输入正文…' value={note.content.body} readOnly={note.content.trashed} spellCheck={false} onChange={event => session.edit(note.id, { body: event.target.value })}/>}
 						</article>
 					</div>
 					<footer className={styles.editorFooter}><span>{note.content.body.length.toLocaleString()} 字符<span className={styles.footerDivider}>/</span>Markdown</span><button onClick={() => void session.flush()} disabled={state.busy}><Check size={13}/>{note.conflict ? '等待处理冲突' : state.busy ? '正在同步…' : note.dirty ? '保存到墨栈' : '已加密保存'}</button>{!note.content.trashed && <button onClick={() => session.edit(note.id, { trashed: true })} title='移到回收站' aria-label='移到回收站'><Trash2 size={15}/></button>}</footer>
@@ -158,5 +155,5 @@ function Workspace({ owner, email, dataKey, epoch, onLock, onSignOut, session }:
 }
 
 function Welcome({ loaded, onCreate }: { loaded: boolean; onCreate: () => void }) {
-	return <div className={styles.welcome}><div className={styles.welcomeArt}><span/><span/><div><PenLine size={42} strokeWidth={1.2}/></div></div><span className={styles.eyebrow}>A QUIET PLACE FOR YOUR MIND</span><h2>让想法，有处落笔。</h2><p>片刻灵感、代码片段、还没写完的计划。<br/>在墨栈，把重要的文字留给自己。</p><button className={styles.primaryButton} disabled={!loaded} onClick={onCreate}><Plus size={17}/>写一篇笔记</button><div className={styles.welcomeFoot}><ShieldCheck size={14}/>私密存储<span>·</span>跨设备同步<span>·</span>Markdown</div></div>
+	return <div className={styles.welcome}><div className={styles.welcomeArt} aria-hidden='true'><span/><span/><div><PenLine size={42} strokeWidth={1.2}/></div></div><button className={styles.primaryButton} disabled={!loaded} onClick={onCreate}><Plus size={17}/>新建笔记</button></div>
 }

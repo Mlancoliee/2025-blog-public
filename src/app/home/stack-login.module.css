@@ -31,7 +31,6 @@
 .brandEnglish { border-left: 1px solid var(--border); padding-left: 12px; margin-left: 2px; font-size: 10px; font-weight: 500; letter-spacing: .16em; color: var(--muted); }
 .intro { margin: 27px 0 25px; text-align: center; }
 .intro h1 { margin: 0; font-size: 29px; line-height: 1.35; font-weight: 650; letter-spacing: .025em; }
-.intro p { margin: 9px 0 0; color: var(--muted); font-size: 13px; line-height: 1.65; }
 .form fieldset { display: grid; gap: 17px; min-width: 0; margin: 0; padding: 0; border: 0; }
 .field { display: grid; gap: 8px; min-width: 0; }
 .field > span { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 550; }
@@ -57,11 +56,11 @@
 .emailSummary span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .sendCode { flex-shrink: 0; padding: 4px 0 4px 10px; border: 0; border-left: 1px solid var(--border); background: none; color: var(--accent); font-size: 12px; }
 .inputWrap .codeInput { letter-spacing: .12em; }
-.feedback { display: flex; align-items: center; justify-content: center; min-height: 44px; padding-top: 5px; }
+.feedback { display: flex; align-items: center; justify-content: center; }
+.feedback:not(:empty) { padding-top: 12px; }
 .feedback p { margin: 0; font-size: 11px; line-height: 1.6; text-align: center; color: var(--muted); }
 .feedback .error { color: #bd344b; }
 .page[data-theme='night'] .feedback .error { color: #ff9fae; }
-.footer { display: flex; justify-content: center; align-items: center; gap: 6px; border-top: 1px solid var(--border); padding-top: 17px; color: var(--muted); font-size: 10px; letter-spacing: .055em; }
 .state { display: flex; flex-direction: column; align-items: center; gap: 15px; padding: 22px 0; text-align: center; color: var(--accent); }
 .state span { max-width: 100%; overflow-wrap: anywhere; font-size: 13px; color: var(--ink); }
 .state p, .hint { margin: 0; font-size: 12px; line-height: 1.7; color: var(--muted); text-align: center; }
@@ -94,6 +93,5 @@
 	.form fieldset { gap: 13px; }
 	.divider { margin-top: 19px; margin-bottom: 13px; }
 	.switchMode { margin-top: 17px; }
-	.footer { padding-top: 13px; }
 }
 @media (prefers-reduced-motion: reduce) { .page * { transition: none; } }

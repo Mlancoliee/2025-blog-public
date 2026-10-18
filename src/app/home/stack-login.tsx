@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, ArrowRight, Eye, EyeOff, LockKeyhole, Mail, PenLine, ShieldCheck, Github } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Eye, EyeOff, LockKeyhole, Mail, PenLine, Github } from 'lucide-react'
 import { useTimeTheme } from '@/components/time-theme-provider'
 import { getAssetUrl } from '@/lib/asset-url'
 import { useStackAuth, type AuthScreen } from '@/lib/stack/use-stack-auth'
@@ -11,17 +11,17 @@ import { VaultGate } from './vault-gate'
 import StackWorkspace from './stack-workspace'
 import type { StackAccount } from '@/lib/stack/types'
 
-const copy: Record<AuthScreen, [string, string]> = {
-	login: ['欢迎回来', '让每一个想法，都有自己的位置。'],
-	register: ['创建你的墨栈', '从验证邮箱开始，留住下一次灵感。'],
-	'register-code': ['验证邮箱', '输入邮件中的验证码，并设置登录密码。'],
-	verify: ['验证你的邮箱', '完成邮箱验证，继续访问私人空间。'],
-	forgot: ['找回登录密码', '我们会向你的邮箱发送重置链接。'],
-	'reset-sent': ['请查收邮件', '如果该邮箱已注册，你将收到重置链接。'],
-	setup: ['开启私人空间', '邮箱已验证，你还没有设置加密口令。'],
-	unlock: ['你的空间已锁定', '账户已登录，文字需要独立的加密口令解锁。'],
-	deleting: ['正在清理空间', '文件清理完成后，你可以重新开启墨栈。'],
-	'connection-error': ['连接暂时中断', '请重试，或退出当前账户后重新登录。']
+const titles: Record<AuthScreen, string> = {
+	login: '登录',
+	register: '注册',
+	'register-code': '验证邮箱',
+	verify: '验证邮箱',
+	forgot: '重置登录密码',
+	'reset-sent': '请查收邮件',
+	setup: '设置加密口令',
+	unlock: '解锁墨栈',
+	deleting: '正在清理空间',
+	'connection-error': '连接中断'
 }
 
 function GoogleIcon() {
@@ -44,7 +44,6 @@ export default function StackLogin() {
 	useEffect(() => () => { unlocked?.key.fill(0) }, [unlocked])
 	useEffect(() => { if (unlocked && unlocked.owner !== auth.owner) setUnlocked(null) }, [auth.owner, unlocked])
 	const { screen, busy } = auth
-	const [title, subtitle] = copy[screen]
 	const formScreen = ['login', 'register', 'register-code', 'verify', 'forgot'].includes(screen)
 	const codeScreen = screen === 'register-code' || screen === 'verify'
 	const passwordScreen = screen === 'login' || screen === 'register-code'
@@ -59,7 +58,7 @@ export default function StackLogin() {
 			<div className={styles.stage}>
 				<article className={styles.card} aria-labelledby='stack-heading'>
 					<div className={styles.brand}><span className={styles.brandIcon}><PenLine size={24} strokeWidth={1.7}/></span><span>墨栈</span><span className={styles.brandEnglish}>INKSTACK</span></div>
-					<header className={styles.intro}><h1 id='stack-heading'>{title}</h1><p>{subtitle}</p></header>
+					<header className={styles.intro}><h1 id='stack-heading'>{titles[screen]}</h1></header>
 					{auth.checking ? <div className={styles.state} role='status'>正在恢复登录状态…</div> : <>
 						{formScreen && <form className={styles.form} onSubmit={event => { event.preventDefault(); void auth.submit() }}>
 							<fieldset disabled={busy}>
@@ -71,17 +70,16 @@ export default function StackLogin() {
 								<button className={styles.primary} type='submit' disabled={busy || (codeScreen && !auth.challenge)}>{busy ? '正在处理…' : screen === 'login' ? '登录' : screen === 'register' ? '发送注册验证码' : screen === 'register-code' ? '验证并创建账户' : screen === 'verify' ? '验证并继续' : '发送重置链接'}{!busy && <ArrowRight size={17}/>}</button>
 							</fieldset>
 						</form>}
-						{screen === 'login' && <><div className={styles.divider}>或使用以下方式继续</div><div className={styles.providers}><button type='button' disabled={busy} onClick={() => void auth.oauth('github')}><Github size={20}/>GitHub</button><button type='button' disabled={busy} onClick={() => void auth.oauth('google')}><GoogleIcon/>Google</button></div><p className={styles.switchMode}>还没有账户？ <button disabled={busy} onClick={() => auth.changeScreen('register')}>立即注册</button></p></>}
+						{screen === 'login' && <><div className={styles.divider}>或</div><div className={styles.providers}><button type='button' disabled={busy} onClick={() => void auth.oauth('github')}><Github size={20}/>GitHub</button><button type='button' disabled={busy} onClick={() => void auth.oauth('google')}><GoogleIcon/>Google</button></div><p className={styles.switchMode}><button disabled={busy} onClick={() => auth.changeScreen('register')}>注册账户</button></p></>}
 						{['register', 'register-code', 'forgot', 'reset-sent'].includes(screen) && <p className={styles.switchMode}><button disabled={busy} onClick={() => auth.changeScreen('login')}>返回登录</button></p>}
-						{screen === 'forgot' && <p className={styles.hint}>登录密码重置不会更改你的加密口令。</p>}
-						{screen === 'reset-sent' && <div className={styles.state}><Mail size={32}/><span>{auth.email}</span><p>请检查收件箱和垃圾邮件文件夹。</p></div>}
+						{screen === 'forgot' && <p className={styles.hint}>此操作不重置加密口令。</p>}
+						{screen === 'reset-sent' && <div className={styles.state}><Mail size={32}/><span>{auth.email}</span><p>若邮箱已注册，请查收重置邮件。</p></div>}
 						{spaceScreen && <VaultGate key={`${auth.owner}:${screen}:${auth.account?.key_revision ?? 0}`} owner={auth.owner} account={auth.account} onUnlock={(key, account) => setUnlocked({ owner: auth.owner, key, account })}/>}
-						{screen === 'deleting' && <div className={styles.state} role='status'><p>正在清理附件，每 30 秒自动检查一次。请勿重复初始化。</p><button type='button' className={styles.secondary} disabled={busy} onClick={() => void auth.retry()}>检查进度</button></div>}
+						{screen === 'deleting' && <div className={styles.state} role='status'><button type='button' className={styles.secondary} disabled={busy} onClick={() => void auth.retry()}>检查进度</button></div>}
 						{screen === 'connection-error' && <button className={styles.primary} disabled={busy} onClick={() => void auth.retry()}>重新连接</button>}
 						{(spaceScreen || screen === 'deleting' || screen === 'verify' || screen === 'connection-error') && <p className={styles.switchMode}><button disabled={busy} onClick={auth.signOut}>退出当前账户</button></p>}
 						<div className={styles.feedback} aria-live='polite'>{auth.error ? <p className={styles.error} role='alert'>{auth.error}</p> : auth.notice ? <p>{auth.notice}</p> : null}</div>
 					</>}
-					<footer className={styles.footer}><ShieldCheck size={14}/><span>私人文字空间 · 端到端加密</span></footer>
 				</article>
 			</div>
 		</section>

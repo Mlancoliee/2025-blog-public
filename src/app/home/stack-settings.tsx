@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Copy, KeyRound, Plus, ShieldCheck, Trash2 } from 'lucide-react'
+import { Copy, Plus, Trash2 } from 'lucide-react'
 import { stackError, stackRequest } from '@/lib/stack/api'
 import { encode64 } from '@/lib/stack/crypto'
 import type { APIKeyInfo, StackAccount } from '@/lib/stack/types'
@@ -34,13 +34,13 @@ export function StackSettings({ owner, dataKey, epoch, onClose }: { owner: strin
 		try { await action() } catch (caught) { setError(stackError(caught)) } finally { setBusy(false) }
 	}
 	async function copy(value: string) {
-		try { await navigator.clipboard.writeText(value); setNotice('已复制，请妥善保管。') }
+		try { await navigator.clipboard.writeText(value); setNotice('已复制') }
 		catch { setError('无法自动复制，请选中文字手动复制。') }
 	}
 	return <StackDialog title='访问与安全' onClose={() => { if (!busy) onClose() }}>
 		<div className={styles.tabs}><button aria-pressed={tab === 'keys'} onClick={() => { setTab('keys'); setAccount(null) }}>访问 Key</button><button aria-pressed={tab === 'security'} onClick={() => setTab('security')}>加密设置</button></div>
 		{tab === 'keys' ? <>
-			<div className={styles.settingsIntro}><KeyRound size={22}/><div><h3>让你的工具读懂墨栈</h3><p>只读 Key 用于读取密文。解密还需单独提供数据密钥。</p></div></div>
+			<p className={styles.caption}>API Key 只能读取密文；解密需要数据密钥。</p>
 			<form className={styles.keyForm} onSubmit={e => { e.preventDefault(); if (loading || issued) return; void run(async () => {
 				const result = await stackRequest<{ key: APIKeyInfo; api_key: string }>(owner, '/api-keys', 'POST', { name: name.trim(), expires_in_days: days })
 				setKeys(current => [result.key, ...current]); setIssued(result.api_key); setName('')
@@ -53,12 +53,10 @@ export function StackSettings({ owner, dataKey, epoch, onClose }: { owner: strin
 			<div className={styles.keyList}>{loading ? <p className={styles.muted} role='status'>正在读取访问 Key…</p> : keys.length === 0 ? <p className={styles.muted}>还没有访问 Key。</p> : keys.map(key => <div key={key.id}><div><strong>{key.name}</strong><p><code>{key.prefix}…</code> · {new Date(key.expires).toLocaleDateString('zh-CN')} {key.expires <= Date.now() ? '已过期' : '到期'}</p></div><button aria-label={`撤销 ${key.name}`} disabled={busy} onClick={() => {
 				if (window.confirm(`撤销“${key.name}”？使用此 Key 的工具将无法继续读取。`)) void run(async () => { await stackRequest(owner, `/api-keys/${key.id}`, 'DELETE'); setKeys(current => current.filter(item => item.id !== key.id)) })
 			}}><Trash2 size={16}/></button></div>)}</div>
-			<p className={styles.caption}>撤销仅阻止后续访问，无法收回已下载的数据。Skill 接入将在后续提供。</p>
 		</> : <>
-			{account ? <><p className={styles.caption}>新恢复密钥生效后，旧恢复密钥失效；账户数据密钥保持不变。</p><VaultGate owner={owner} account={account} dataKey={dataKey} onUnlock={key => { key.fill(0); setAccount(null); setNotice('加密口令与恢复密钥已更新。') }}/></> : <>
-				<div className={styles.settingsIntro}><ShieldCheck size={23}/><div><h3>由你保管的文字</h3><p>标题、正文、标签及收藏状态均在浏览器中加密。</p></div></div>
+			{account ? <><p className={styles.caption}>更改后，旧恢复密钥将失效。</p><VaultGate owner={owner} account={account} dataKey={dataKey} onUnlock={key => { key.fill(0); setAccount(null); setNotice('加密口令与恢复密钥已更新。') }}/></> : <>
 				<button className={styles.outlineButton} disabled={busy} onClick={() => void run(async () => { const result = await stackRequest<{ account: StackAccount | null }>(owner, '/bootstrap'); if (result.account?.sync_epoch !== epoch) throw new Error('空间已变化，请导出草稿并重新解锁后再修改加密设置。'); setAccount(result.account) })}>更改加密口令</button>
-				<hr className={styles.rule}/><h3>向可信工具提供数据密钥</h3><p className={styles.caption}>拥有此密钥及密文的工具可以解密全部笔记。不要提供给不信任的服务，更改加密口令不会撤销已导出的数据密钥。</p>
+				<hr className={styles.rule}/><h3>数据密钥</h3><p className={styles.caption}>持有此密钥和密文即可解密所有笔记；更改口令不会撤销此密钥。</p>
 				{reveal ? <section className={styles.secretBox}><textarea readOnly value={encode64(dataKey)} rows={2} aria-label='账户数据密钥'/><div><button onClick={() => void copy(encode64(dataKey))}><Copy size={15}/>复制数据密钥</button><button onClick={() => setReveal(false)}>隐藏</button></div></section> : <button className={styles.outlineButton} onClick={() => setReveal(true)}>显示数据密钥</button>}
 			</>}
 		</>}

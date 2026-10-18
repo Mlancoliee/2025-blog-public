@@ -52,7 +52,7 @@ export function useStackAuth() {
 	async function finish(record: RecordModel) {
 		setOwner(record.id)
 		setEmail(record.email || ''); setPassword(''); setPasswordConfirm('')
-		if (!record.verified) { setScreen('verify'); setNotice('验证邮箱后即可继续。'); return }
+		if (!record.verified) { setScreen('verify'); return }
 		try {
 			const data = checkBootstrap(await getStackPocketBase().send<Bootstrap>('/api/stack/v1/bootstrap', { method: 'GET', requestKey: null }))
 			if (getStackPocketBase().authStore.record?.id !== record.id) return
@@ -114,7 +114,7 @@ export function useStackAuth() {
 		setChallenge(result.challenge); setCode(''); setRemaining(result.retry_after)
 		setRetryAt(Date.now() + result.retry_after * 1000)
 		setScreen(purpose === 'register' ? 'register-code' : 'verify')
-		setNotice(purpose === 'register' ? '验证码 10 分钟内有效。已注册的邮箱请直接登录。' : '验证码已发送，10 分钟内有效。')
+		setNotice('验证码已发送，10 分钟内有效。')
 	}
 	function submit() {
 		return run(async () => {

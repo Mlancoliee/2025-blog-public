@@ -48,6 +48,14 @@ The virtual-list component opts out of compiler inference for its mutable
 virtualizer instance and uses explicit memoization for props/row keys.
 An empty account shows a real empty state; do not insert demo notes into accounts.
 
+Visible copy is limited to functional titles, field labels, brief empty states
+and operation feedback. Do not add slogans, decorative English captions or
+repeated privacy/encryption badges to auth, unlock or workspace screens. Empty
+notes have no generated preview text; an empty tag list has no sidebar section.
+Keep recovery-key acknowledgement, key-exposure warnings and destructive-action,
+conflict and unsaved-work messages at their relevant actions. Feedback regions
+stay mounted for accessibility but reserve space only when they contain text.
+
 The information layout draws on [Notion's sidebar guidance](https://www.notion.com/help/navigate-with-the-sidebar)
 and [AFFiNE's navigation/favorites update](https://affine.pro/blog/whats-new-affine-dec-update).
 Their source or visual assets are not copied. This first implementation uses a

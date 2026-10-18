@@ -8,9 +8,10 @@ import styles from './stack-workspace.module.css'
 
 const formatter = new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric' })
 const NoteRow = memo(function NoteRow({ note, selected, onSelect }: { note: Note; selected: boolean; onSelect: (id: string) => void }) {
+	const preview = note.content.body.slice(0, 250).replace(/[#*`>]/g, '').slice(0, 125)
 	return <button className={styles.noteRow} aria-current={selected ? 'true' : undefined} onClick={() => onSelect(note.id)}>
 		<div><FileText size={14}/><strong>{note.content.title.trim() || '未命名笔记'}</strong>{note.content.favorite && <Star size={13} className={styles.star}/>}</div>
-		<p>{note.content.body.slice(0, 250).replace(/[#*`>]/g, '').slice(0, 125) || '留一点空白，写下一次灵感。'}</p>
+		{preview && <p>{preview}</p>}
 		<footer><time>{formatter.format(new Date(note.updated))}</time>{note.conflict ? <span className={styles.error}>版本冲突</span> : note.dirty ? <span>待保存</span> : itemTags(note)}</footer>
 	</button>
 })
