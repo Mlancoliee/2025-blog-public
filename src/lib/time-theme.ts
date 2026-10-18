@@ -151,6 +151,14 @@ export function getTimeTheme(date = new Date()) {
 	return timeThemes[getTimeThemeName(date)]
 }
 
+export const manualThemeStorageKey = 'blog-time-theme'
+export function getManualTimeTheme(): TimeThemeName | null {
+	try {
+		const name = sessionStorage.getItem(manualThemeStorageKey)
+		return name && Object.hasOwn(timeThemes, name) ? name as TimeThemeName : null
+	} catch { return null }
+}
+
 export function getMsUntilNextTimeTheme(date = new Date()) {
 	const hour = date.getHours()
 	const next = new Date(date)
@@ -188,7 +196,8 @@ export function getTimeThemeInitScript() {
 		(() => {
 			const themes = ${payload};
 			const hour = new Date().getHours();
-			const name = hour >= 5 && hour < 9 ? 'dawn' : hour >= 9 && hour < 16 ? 'noon' : hour >= 16 && hour < 19 ? 'sunset' : 'night';
+			let name = hour >= 5 && hour < 9 ? 'dawn' : hour >= 9 && hour < 16 ? 'noon' : hour >= 16 && hour < 19 ? 'sunset' : 'night';
+			try { const saved = sessionStorage.getItem('${manualThemeStorageKey}'); if (Object.hasOwn(themes, saved)) name = saved; } catch {}
 			const theme = themes[name];
 			const root = document.documentElement;
 			root.dataset.timeTheme = name;

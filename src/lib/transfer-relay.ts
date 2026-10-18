@@ -10,6 +10,7 @@ import {
 	encodeTextPayload,
 	encryptTransferChunk
 } from './transfer-crypto'
+import { requestTransferChunk, runTransferChunks } from './transfer-chunks'
 import { createRelayDownloadStorage, type RelayDownloadStorage } from './transfer-download-storage'
 import {
 	TRANSFER_FILE_LIMIT_LABEL,
@@ -51,6 +52,7 @@ type CreateRelayOptions = {
 	completeUrl: string
 	fileLimitBytes?: number
 	fileTooLargeMessage?: string
+	signal?: AbortSignal
 	onStatus?: StatusSink
 }
 
@@ -142,20 +144,20 @@ function downloadObjectUrl(filename: string, url: string) {
 	link.remove()
 }
 
-async function uploadCipher(url: string, cipher: Uint8Array, message: string) {
-	const upload = await fetch(url, {
+async function uploadCipher(url: string, cipher: Uint8Array, signal: AbortSignal, message: string) {
+	await requestTransferChunk(url, {
 		method: 'PUT',
 		headers: { 'Content-Type': TRANSFER_UPLOAD_CONTENT_TYPE },
 		body: bytesToArrayBuffer(cipher)
-	})
-	if (!upload.ok) throw new Error(message)
+	}, async () => {}, signal, message)
 }
 
-async function completeTransfer(completeUrl: string, code: string) {
+async function completeTransfer(completeUrl: string, code: string, signal?: AbortSignal) {
 	await fetchTransferJson<TransferPublicMeta>(completeUrl, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ code })
+		body: JSON.stringify({ code }),
+		signal
 	})
 }
 
@@ -195,16 +197,19 @@ async function readPlainChunk(payload: PreparedPayload, chunk: TransferChunkMeta
 }
 
 export async function createRelayTransfer(options: CreateRelayOptions) {
+	options.signal?.throwIfAborted()
 	assertPassword(options.password)
 	options.onStatus?.('正在准备分片...')
 	const payload = preparePayload(options)
 	const chunks = createChunkManifest(payload.size)
 	const chunkSize = TRANSFER_LIMITS.publicRelayChunkBytes
 	const context = await createTransferEncryptionContext(options.password)
+	options.signal?.throwIfAborted()
 
 	options.onStatus?.('正在创建中转链接...')
 	const created = await fetchTransferJson<TransferCreateResponse>(options.createUrl, {
 		method: 'POST',
+		signal: options.signal,
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({
 			kind: payload.kind,
@@ -223,19 +228,29 @@ export async function createRelayTransfer(options: CreateRelayOptions) {
 	const uploadUrls = new Map(created.uploadUrls.map(item => [item.index, item.url]))
 	if (uploadUrls.size !== chunks.length) throw new Error('分片上传地址生成失败')
 
-	for (const chunk of chunks) {
+	let uploadedBytes = 0
+	let uploadedChunks = 0
+	options.onStatus?.('正在加密并上传 0%')
+	await runTransferChunks(chunks, async (chunk, signal) => {
 		const displayIndex = chunk.index + 1
 		const uploadUrl = uploadUrls.get(chunk.index)
 		if (!uploadUrl) throw new Error(`第 ${displayIndex} 个分片上传失败，请重试`)
 
-		options.onStatus?.(`正在加密并上传分片 ${displayIndex} / ${chunks.length}`)
 		const plain = await readPlainChunk(payload, chunk)
+		signal.throwIfAborted()
 		const encrypted = await encryptTransferChunk(plain, context.key, chunk.iv)
-		await uploadCipher(uploadUrl, encrypted.cipher, `第 ${displayIndex} 个分片上传失败，请重试`)
-	}
+		signal.throwIfAborted()
+		await uploadCipher(uploadUrl, encrypted.cipher, signal, `第 ${displayIndex} 个分片上传失败，请重新发送`)
+		signal.throwIfAborted()
+		uploadedBytes += chunk.plainSize
+		uploadedChunks++
+		options.onStatus?.(`正在加密并上传 ${Math.floor(uploadedBytes / payload.size * 100)}%（${uploadedChunks} / ${chunks.length} 片）`)
+	}, { signal: options.signal })
 
+	options.signal?.throwIfAborted()
 	options.onStatus?.('正在确认上传...')
-	await completeTransfer(options.completeUrl, created.code)
+	await completeTransfer(options.completeUrl, created.code, options.signal)
+	options.signal?.throwIfAborted()
 	return created
 }
 
@@ -252,25 +267,36 @@ async function openChunkManifest(response: Response, key: CryptoKey, storage: Re
 	const opened = (await response.json()) as TransferOpenResponse
 	const chunks = sortOpenChunks(opened)
 	const parts: Uint8Array[] = []
+	let savedBytes = 0
+	let savedChunks = 0
 
-	for (const chunk of chunks) {
-		signal?.throwIfAborted()
+	onStatus?.('正在下载并解密 0%')
+	await runTransferChunks(chunks, async (chunk, chunkSignal) => {
 		const displayIndex = chunk.index + 1
-		onStatus?.(`正在下载分片 ${displayIndex} / ${chunks.length}`)
-		const chunkResponse = await fetch(chunk.url, { signal })
-		if (!chunkResponse.ok) throw new Error(`第 ${displayIndex} 个分片下载失败，请重新读取`)
+		const cipher = await requestTransferChunk(chunk.url, {}, response => response.arrayBuffer(), chunkSignal, `第 ${displayIndex} 个分片下载失败，提取入口已销毁，请让发送方重新发送`)
+		chunkSignal.throwIfAborted()
 
-		onStatus?.(`正在解密${storage ? '并保存' : ''}分片 ${displayIndex} / ${chunks.length}`)
-		let plain: Uint8Array
 		try {
-			plain = await decryptTransferChunk(await chunkResponse.arrayBuffer(), key, chunk.iv)
+			const plain = await decryptTransferChunk(cipher, key, chunk.iv)
+			chunkSignal.throwIfAborted()
+			return plain
 		} catch {
+			chunkSignal.throwIfAborted()
 			throw new Error('密码不正确或文件分片已损坏')
 		}
-		if (storage) await storage.write(plain)
-		else parts.push(plain)
-	}
+	}, {
+		signal,
+		async consume(plain, chunk, chunkSignal) {
+			if (storage) await storage.write(plain)
+			else parts.push(plain)
+			chunkSignal.throwIfAborted()
+			savedBytes += chunk.plainSize
+			savedChunks++
+			onStatus?.(`正在下载并解密${storage ? '保存' : ''} ${Math.floor(savedBytes / opened.size * 100)}%（${savedChunks} / ${chunks.length} 片）`)
+		}
+	})
 
+	signal?.throwIfAborted()
 	onStatus?.('正在准备下载文件')
 	if (opened.kind === 'text') return { text: decodeTextPayload(concatBytes(parts)) }
 	const contentType = opened.contentType || 'application/octet-stream'
@@ -293,6 +319,7 @@ async function openChunkManifest(response: Response, key: CryptoKey, storage: Re
 }
 
 export async function openRelayTransfer(options: OpenRelayOptions) {
+	options.signal?.throwIfAborted()
 	options.onStatus?.('正在读取元信息...')
 	const meta = await fetchTransferJson<TransferPublicMeta>(options.metaUrl, { signal: options.signal })
 	if (meta.status !== 'ready') throw new Error('密文还在上传中，请稍后再试')

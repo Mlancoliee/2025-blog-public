@@ -11,6 +11,7 @@ Owns the password-protected EdgeOne relay at `/t`, including encrypted chunk lif
 | `src/app/t/` | Public create/read/status UI. |
 | `src/lib/transfer-crypto.ts` | Browser encryption/key derivation. |
 | `src/lib/transfer-relay.ts` | Relay client flow. |
+| `src/lib/transfer-chunks.ts` | Four-slot chunk scheduling, ordered receive backpressure, cancellation and bounded direct-request retries. |
 | `src/lib/transfer-download-storage.ts` | Browser-private disk storage and temporary-file cleanup for large downloads. |
 | `src/lib/transfer-stats.ts` | Merge paginated admin statistics and retain global largest objects. |
 | `edge-functions/api/transfer/` | Create, complete, meta, open, stats, cleanup API. |
@@ -20,14 +21,16 @@ Owns the password-protected EdgeOne relay at `/t`, including encrypted chunk lif
 
 ## Main Flow
 
-Browser derives AES-GCM key from password, encrypts chunks, asks EdgeOne for upload URLs, uploads directly to Blob, then marks the manifest ready. Recipient sends only a derived proof; `open` returns one-time direct download URLs and the browser decrypts locally.
+Browser derives an AES-GCM key from the password, creates the chunk manifest and obtains upload URLs. Four browser workers each read, encrypt and upload a chunk directly to Blob; only a fully successful upload calls `complete`. Recipient sends only a derived proof; `open` returns one-time direct download URLs. The browser downloads/decrypts a window of four chunks and consumes them in manifest order.
 
 ## Pay Attention
 
 - Never send plaintext/password through the server; Blob bytes do not pass through Edge Function responses.
 - Text/pasted images are capped at 4 MiB; regular files at 800 MiB with 4 MiB plaintext chunks (at most 200). Upload/download URLs last one hour; the daily transfer expiry still applies. Keep the browser and Edge Function size limits synchronized.
-- Files above 200 MiB require OPFS writable storage. Check available browser quota and prepare the writer before calling the consume-on-open endpoint, then decrypt/write one chunk at a time. Smaller files retain the in-memory path.
-- Releasing a received file revokes its object URL and removes its temporary disk file. Failed/cancelled receives abort and remove the partial file; leaving the UI cancels an active receive. A later large receive clears temporary files older than 24 hours after tab interruptions.
+- Files above 200 MiB require OPFS writable storage. Check available browser quota and prepare the writer before calling the consume-on-open endpoint. Download/decrypt at most four unconsumed chunks; one consumer appends them in order and refills a slot only after its write completes. Slow early chunks or disk writes must not accumulate the entire file in memory. The plaintext window is at most 16 MiB, plus ciphertext/browser buffers. Smaller files still retain the completed file in memory.
+- Chunk GET/PUT requests retry transient network/body-read errors and HTTP 408/429/5xx at most twice, with exponential backoff, jitter and Retry-After. A server cooldown above 30 seconds stops the transfer instead of retrying early. Retries reuse the same URL and upload ciphertext/IV; crypto/authentication failures and other 4xx responses are terminal. Never retry create/open or reopen a consumed code automatically.
+- Both transfer directions share a UI operation guard, byte-weighted completed-chunk progress and explicit cancellation. A failed chunk aborts its peers; wait for all started reads/crypto/network work and any current write to settle before returning or disposing local storage. Leaving the UI aborts uploads as well as downloads, and prevents stale status/results from updating a later operation.
+- Releasing a received file revokes its object URL and removes its temporary disk file. Failed/cancelled receives abort and remove the partial file; an already consumed code stays consumed. Partial uploads remain for normal Blob cleanup. A later large receive clears temporary files older than 24 hours after tab interruptions.
 - The free Blob account quota is 1 GB across stored objects, independent of the per-file limit. Consuming a code removes its indexes; server chunks remain until scheduled/manual cleanup, so an 800 MiB transfer leaves little capacity for additional uploads.
 - Do not add a silent Next/Netlify fallback; `NEXT_PUBLIC_TRANSFER_API_BASE` is required.
 - `complete` must not HEAD every chunk; missing objects surface at recipient download.

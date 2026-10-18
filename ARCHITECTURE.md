@@ -12,6 +12,7 @@ This file is intentionally a **short maintenance entrypoint**. Detailed implemen
 | --- | --- |
 | Any maintenance task | [Project wiki index](./.project-wiki/INDEX.md) |
 | Understand runtime, theme, navigation, homepage, or performance | [Frontend](./.project-wiki/modules/frontend.md) |
+| Work on InkStack private notes, encryption or PocketBase integration | [InkStack](./.project-wiki/modules/inkstack.md) |
 | Work on articles, Markdown, images, news, likes, or content data | [Content](./.project-wiki/modules/content.md) |
 | Work on encrypted public relay or EdgeOne transfer API | [Public transfer](./.project-wiki/modules/public-transfer.md) |
 | Work on LAN V14, native Agent transfer, benchmarks, or recovery | [LAN transfer](./.project-wiki/modules/lan-transfer.md) |
@@ -66,6 +67,6 @@ edge-functions/   EdgeOne transfer relay
 ## Documentation Maintenance
 
 - Root [README.md](./README.md) is the concise repository entrypoint.
-- `.project-wiki/INDEX.md` routes to eight focused module documents.
+- `.project-wiki/INDEX.md` routes to focused module documents, including InkStack.
 - Update the module that owns a behavior change; update this root file only when module routing changes.
 - Existing maintenance constraints for coding agents remain in [AGENTS.md](./AGENTS.md).

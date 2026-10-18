@@ -50,10 +50,11 @@ function ThemedLayout({ children }: PropsWithChildren) {
 	const clickEffectPreference = useClickEffectPreference()
 	const pathname = usePathname()
 	const isOrbitalisRoute = pathname === '/orbitalis'
+	const isStackRoute = pathname === '/home' || pathname.startsWith('/home/')
 	const isVersionControlRoute = pathname.startsWith('/toolbox/version-control')
 	const isVersionControlCallback = pathname === '/toolbox/version-control/agent-return'
 	const versionControlWorkbenchOpen = useVersionControlStore(state => Boolean(state.browserDirectory || state.repository))
-	const atmosphereAnimated = pathname !== '/game' && pathname !== '/world-clock' && !isOrbitalisRoute
+	const atmosphereAnimated = pathname !== '/game' && pathname !== '/world-clock' && !isStackRoute && !isOrbitalisRoute
 	const clickEffectEnabled = clickEffectPreference.ready && clickEffectPreference.enabled && atmosphereAnimated && !(isVersionControlRoute && versionControlWorkbenchOpen)
 	const homeFitActive = pathname === '/' && !maxSM
 	const [homeFit, setHomeFit] = useState({ ready: false, scale: 1 })
@@ -100,7 +101,7 @@ function ThemedLayout({ children }: PropsWithChildren) {
 					} as React.CSSProperties
 				}
 			/>
-			{mounted && !isOrbitalisRoute ? (
+			{mounted && !isStackRoute && !isOrbitalisRoute ? (
 				<TimeAtmosphereBackground
 					animated={atmosphereAnimated}
 					theme={timeTheme}
@@ -111,11 +112,11 @@ function ThemedLayout({ children }: PropsWithChildren) {
 			)}
 			<main className='relative z-10 h-full' style={mainStyle}>
 				{children}
-				{!isOrbitalisRoute && !isVersionControlCallback && !(isVersionControlRoute && versionControlWorkbenchOpen) && <NavCard />}
+				{!isStackRoute && !isOrbitalisRoute && !isVersionControlCallback && !(isVersionControlRoute && versionControlWorkbenchOpen) && <NavCard />}
 			</main>
 			<ClickEffectLayer enabled={clickEffectEnabled} theme={timeTheme} />
 
-			{!isOrbitalisRoute && !isVersionControlRoute && pathname !== '/music' && maxSM && init && <ScrollTopButton className='bg-brand/20 fixed right-6 bottom-8 z-50 shadow-md' />}
+			{!isStackRoute && !isOrbitalisRoute && !isVersionControlRoute && pathname !== '/music' && maxSM && init && <ScrollTopButton className='bg-brand/20 fixed right-6 bottom-8 z-50 shadow-md' />}
 		</MusicPlayerProvider>
 	)
 }

@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { startAnimationLoop } from '@/lib/animation-loop'
+import { createAtmosphereMaterial } from '@/lib/orbitalis-atmosphere'
 import { orbitalisAssets } from './orbitalis-assets'
 
 export interface OrbitalisInput {
@@ -168,39 +169,11 @@ export async function mountOrbitalis(
 
 		const atmosphereGeometry = track(new THREE.SphereGeometry(1, 96, 48))
 		const layers = [
-			{ radius: 5.064 / 5.05, power: 8, opacity: 0.7, color: [0.16, 0.48, 1], emission: 5 },
-			{ radius: 5.102 / 5.05, power: 12, opacity: 0.25, color: [0.18, 0.22, 1], emission: 0.8 }
+			{ radius: 5.064 / 5.05, power: 8, opacity: 0.7, colorLinear: [0.16, 0.48, 1], emission: 5 },
+			{ radius: 5.102 / 5.05, power: 12, opacity: 0.25, colorLinear: [0.18, 0.22, 1], emission: 0.8 }
 		]
 		for (const layer of layers) {
-			const atmosphere = track(new THREE.ShaderMaterial({
-				uniforms: {
-					tint: { value: new THREE.Color().fromArray(layer.color).multiplyScalar(layer.emission) },
-					power: { value: layer.power },
-					opacity: { value: layer.opacity },
-					sunDirection: { value: new THREE.Vector3(0.85052991, 0.45067921, 0.27108523).normalize() }
-				},
-				vertexShader: `varying vec3 worldNormal; varying vec3 worldPosition;
-					void main() {
-						vec4 world = modelMatrix * vec4(position, 1.0);
-						worldPosition = world.xyz;
-						worldNormal = normalize(mat3(modelMatrix) * normal);
-						gl_Position = projectionMatrix * viewMatrix * world;
-					}`,
-				fragmentShader: `uniform vec3 tint; uniform float power; uniform float opacity;
-					uniform vec3 sunDirection; varying vec3 worldNormal; varying vec3 worldPosition;
-					void main() {
-						vec3 n = normalize(worldNormal);
-						vec3 v = normalize(cameraPosition - worldPosition);
-						float rim = pow(1.0 - clamp(abs(dot(n, v)), 0.0, 1.0), power);
-						float light = max(dot(n, sunDirection), 0.0) + 0.1;
-						gl_FragColor = vec4(tint, clamp(rim * opacity * light, 0.0, 1.0));
-						#include <tonemapping_fragment>
-						#include <colorspace_fragment>
-					}`,
-				transparent: true,
-				depthWrite: false,
-				side: THREE.FrontSide
-			}))
+			const atmosphere = track(createAtmosphereMaterial(layer, [0.85052991, 0.45067921, 0.27108523], 0.1))
 			const shell = new THREE.Mesh(atmosphereGeometry, atmosphere)
 			shell.scale.setScalar(layer.radius)
 			root.add(shell)
@@ -266,7 +239,6 @@ export async function mountOrbitalis(
 				})
 			}, 300)
 		}
-		return dispose
 	} catch (error) {
 		dispose()
 		throw error

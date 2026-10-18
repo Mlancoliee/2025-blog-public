@@ -1,6 +1,6 @@
 // Adapted from Orbitalis, Copyright (c) 2026 WinriseF. MIT license: ./LICENSE.
 import { defaultLunarView, zoomLunarView, lunarWheelFactor, LUNAR_ZOOM, type LunarView, type LunarViewPoint } from './lunar-view'
-import type { LunarPose, LunarResolution, LunarScene } from './lunar-scene'
+import type { LunarPose, LunarScene } from './lunar-scene'
 import type { TextureQuality } from './scene-assets'
 
 /** WebGL reports allocation failure through getError rather than a thrown exception. */
@@ -20,7 +20,6 @@ export type LunarState = {
 	stationDragging?: boolean
 	stationHovered?: boolean
 	zoom: number
-	resolution: LunarResolution | null
 	fallbackReason: LunarFallbackReason | null
 }
 type Connection = EventTarget & { saveData?: boolean }
@@ -43,7 +42,6 @@ export function attachLunarController(
 	const abort = new AbortController()
 	let scene: LunarScene | null = null
 	let phase: LunarState['phase'] = 'poster'
-	let resolution: LunarResolution | null = null
 	let fallbackReason: LunarFallbackReason | null = null
 	let inView = typeof IntersectionObserver === 'undefined'
 	let pageActive = true
@@ -74,7 +72,7 @@ export function attachLunarController(
 	const rotating = () => rotation === 'on' || (rotation === 'default' && !staticPreference())
 	const moving = () => Math.abs(target.yaw - pose.yaw) + Math.abs(target.pitch - pose.pitch) > 0.0005
 	const report = () => {
-		if (!disposed) onChange({ phase, rotating: phase === 'ready' && rotating(), dragging: stationDragging || !!pointer?.moved || !!pinch, stationDragging, stationHovered, zoom: view.zoom, resolution, fallbackReason })
+		if (!disposed) onChange({ phase, rotating: phase === 'ready' && rotating(), dragging: stationDragging || !!pointer?.moved || !!pinch, stationDragging, stationHovered, zoom: view.zoom, fallbackReason })
 	}
 	const setStationHovered = (hovered: boolean) => {
 		if (stationHovered === hovered) return
@@ -110,7 +108,6 @@ export function attachLunarController(
 		failed = true
 		abort.abort()
 		phase = 'fallback'
-		resolution = null
 		fallbackReason = error instanceof LunarGpuMemoryError ? { kind: 'gpu-memory' } : null
 		releasePointer()
 		scene?.dispose()
@@ -170,7 +167,7 @@ export function attachLunarController(
 		height = Math.max(host.clientHeight, 1)
 		bounds = host.getBoundingClientRect()
 		try {
-			resolution = scene?.resize(width, height, lunarPixelRatio(width, height)) || null
+			scene?.resize(width, height, lunarPixelRatio(width, height))
 		} catch (error) {
 			fail(error)
 			return
@@ -326,17 +323,11 @@ export function attachLunarController(
 		if (!pointer || event.pointerId !== pointer.id) return
 		if (stationDragging) {
 			event.preventDefault()
-			const update: unknown = scene?.stationDrag?.move(point(event.clientX, event.clientY), pose, view)
+			const update = scene?.stationDrag?.move(point(event.clientX, event.clientY), pose, view)
 			pointer.x = event.clientX
 			pointer.y = event.clientY
-			// Treat malformed projection results as a missed move, without disturbing the last valid pose.
-			if (!update || typeof update !== 'object') return
-			const { stationOrbit: nextOrbit, stationFrame: incomingFrame } = update as { stationOrbit?: unknown; stationFrame?: unknown }
-			if (typeof nextOrbit !== 'number' || !Number.isFinite(nextOrbit) || !Array.isArray(incomingFrame) || incomingFrame.length !== 4) return
-			const nextFrame: NonNullable<LunarPose['stationFrame']> = [incomingFrame[0], incomingFrame[1], incomingFrame[2], incomingFrame[3]]
-			if (!nextFrame.every(value => typeof value === 'number' && Number.isFinite(value))) return
-			const frameLength = Math.hypot(...nextFrame)
-			if (!Number.isFinite(frameLength) || Math.abs(frameLength - 1) > 1e-6) return
+			if (!update) return
+			const { stationOrbit: nextOrbit, stationFrame: nextFrame } = update
 			const previousFrame = pose.stationFrame ?? [0, 0, 0, 1]
 			const changed = nextOrbit !== pose.stationOrbit || nextFrame.some((value, index) => value !== previousFrame[index])
 			pose.stationOrbit = nextOrbit

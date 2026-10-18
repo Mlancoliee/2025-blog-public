@@ -9,10 +9,10 @@ import { motion } from 'motion/react'
 import { useEffect, useState, useMemo } from 'react'
 import { toast } from 'sonner'
 import { useSize } from '@/hooks/use-size'
-import { Wrench } from 'lucide-react'
+import { Pencil, Wrench } from 'lucide-react'
 
 type SocialButtonType = 'github' | 'juejin' | 'email' | 'link'
-const SPHERE_ENTRY_WIDTH = 64
+const STACK_ENTRY_WIDTH = 64
 const TOOLBOX_ENTRY_WIDTH = 64
 
 interface SocialButtonConfig {
@@ -60,7 +60,7 @@ export default function SocialButtons() {
 
 		timers.push(
 			setTimeout(() => {
-				setShowStates(prev => ({ ...prev, sphereEntry: true }))
+				setShowStates(prev => ({ ...prev, entryButtons: true }))
 			}, baseDelay + sortedButtons.length * delay)
 		)
 
@@ -69,7 +69,7 @@ export default function SocialButtons() {
 		}
 	}, [order, delay, sortedButtons])
 
-	const width = styles.width + SPHERE_ENTRY_WIDTH + TOOLBOX_ENTRY_WIDTH
+	const width = styles.width + STACK_ENTRY_WIDTH + TOOLBOX_ENTRY_WIDTH
 	const x = styles.offsetX !== null ? center.x + styles.offsetX : center.x + hiCardStyles.width / 2 - width
 	const y = styles.offsetY !== null ? center.y + styles.offsetY : center.y + hiCardStyles.height / 2 + CARD_SPACING
 
@@ -149,20 +149,16 @@ export default function SocialButtons() {
 		<motion.div className='absolute max-sm:static' animate={{ left: x, top: y }} initial={{ left: x, top: y }}>
 			<div className='absolute top-0 left-0 flex flex-row-reverse items-center gap-3 max-sm:static max-sm:max-w-[calc(100vw-2rem)] max-sm:flex-wrap max-sm:justify-center' style={maxSM ? undefined : { width }}>
 				{sortedButtons.map(button => renderButton(button))}
-				{showStates.sphereEntry && (
+				{showStates.entryButtons && (
 					<>
 						<motion.div initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-							<Link
+							<a
 								href='/home'
-								aria-label='打开 3D 卡片球'
-								title='3D 卡片球'
-								className='card group relative flex h-12 w-[52px] shrink-0 items-center justify-center overflow-hidden rounded-xl p-0'>
-								<span className='absolute inset-1.5 rounded-lg border border-white/70 bg-white/20' />
-								<span className='relative h-6 w-6 rounded-full border border-white bg-linear shadow-sm'>
-									<span className='absolute top-1/2 left-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-[6px] border border-white/80 bg-white/35 shadow-sm' />
-									<span className='absolute top-1/2 left-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-sm bg-white' />
-								</span>
-							</Link>
+								aria-label='打开墨栈登录页'
+								title='墨栈'
+								className='card relative flex h-12 w-[52px] shrink-0 items-center justify-center overflow-hidden rounded-xl p-0'>
+								<Pencil className='text-brand h-7 w-7 drop-shadow-[0_0_10px_var(--color-brand)]' strokeWidth={2.2} aria-hidden='true' />
+							</a>
 						</motion.div>
 						<motion.div initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
 							<Link

@@ -94,9 +94,12 @@ export function TransferTool({ initialCode = '' }: TransferToolProps) {
 	const [openedFile, setOpenedFile] = useState<OpenedRelayFile | null>(null)
 	const [status, setStatus] = useState('')
 	const [busy, setBusy] = useState(false)
-	const receiveController = useRef<AbortController | null>(null)
+	const activeTransfer = useRef<AbortController | null>(null)
 	const isCodeEntry = Boolean(normalizeCode(initialCode))
-	useEffect(() => () => receiveController.current?.abort(), [])
+	useEffect(() => () => {
+		activeTransfer.current?.abort()
+		activeTransfer.current = null
+	}, [])
 
 	useEffect(() => {
 		const code = normalizeCode(initialCode)
@@ -166,7 +169,14 @@ export function TransferTool({ initialCode = '' }: TransferToolProps) {
 		}
 	}, [privateResultLink])
 
+	const reportStatus = (controller: AbortController, message: string) => {
+		if (activeTransfer.current === controller && !controller.signal.aborted) setStatus(message)
+	}
+
 	const handleCreate = async () => {
+		if (activeTransfer.current) return
+		const controller = new AbortController()
+		activeTransfer.current = controller
 		setBusy(true)
 		setStatus('')
 		setResult(null)
@@ -185,20 +195,26 @@ export function TransferTool({ initialCode = '' }: TransferToolProps) {
 				completeUrl,
 				fileLimitBytes: pastedImage ? TRANSFER_LIMITS.publicRelayChunkBytes : undefined,
 				fileTooLargeMessage: pastedImage ? `粘贴图片最多 ${contentLimitLabel}，请用文件上传或局域网互传` : undefined,
-				onStatus: setStatus
+				signal: controller.signal,
+				onStatus: message => reportStatus(controller, message)
 			})
+			if (controller.signal.aborted || activeTransfer.current !== controller) return
 			setResult(created)
 			setResultPassword(createPassword)
 			setOpenCode(created.code)
 			setStatus('发送完成')
 		} catch (error) {
-			setStatus(error instanceof Error ? error.message : '创建失败')
+			if (activeTransfer.current === controller) setStatus(controller.signal.aborted ? '传输已取消' : error instanceof Error ? error.message : '创建失败')
 		} finally {
-			setBusy(false)
+			if (activeTransfer.current === controller) {
+				activeTransfer.current = null
+				setBusy(false)
+			}
 		}
 	}
 
 	const handleOpen = async () => {
+		if (activeTransfer.current) return
 		const code = normalizeCode(openCode)
 		if (!TRANSFER_CODE_PATTERN.test(code)) {
 			setStatus('请输入 6 位提取码')
@@ -213,22 +229,24 @@ export function TransferTool({ initialCode = '' }: TransferToolProps) {
 		setOpenedText('')
 		setOpenedFile(null)
 		const controller = new AbortController()
-		receiveController.current = controller
+		activeTransfer.current = controller
 		try {
 			const metaUrl = `${transferApiUrl('meta')}?code=${encodeURIComponent(code)}`
 			const openUrl = transferApiUrl('open')
-			const opened = await openRelayTransfer({ code, password: openPassword, metaUrl, openUrl, signal: controller.signal, onStatus: setStatus })
-			if (controller.signal.aborted) {
+			const opened = await openRelayTransfer({ code, password: openPassword, metaUrl, openUrl, signal: controller.signal, onStatus: message => reportStatus(controller, message) })
+			if (controller.signal.aborted || activeTransfer.current !== controller) {
 				await opened.file?.dispose()
 				return
 			}
 			if ('file' in opened && opened.file) setOpenedFile(opened.file)
 			else if ('text' in opened) setOpenedText(opened.text)
 		} catch (error) {
-			if (!controller.signal.aborted) setStatus(error instanceof Error ? error.message : '读取失败')
+			if (activeTransfer.current === controller) setStatus(controller.signal.aborted ? '传输已取消，已销毁的提取入口无法恢复' : error instanceof Error ? error.message : '读取失败')
 		} finally {
-			receiveController.current = null
-			setBusy(false)
+			if (activeTransfer.current === controller) {
+				activeTransfer.current = null
+				setBusy(false)
+			}
 		}
 	}
 
@@ -279,7 +297,6 @@ export function TransferTool({ initialCode = '' }: TransferToolProps) {
 				</div>
 				<div className='max-w-[360px] space-y-2 text-right text-xs leading-5 text-secondary max-sm:text-left'>
 					<p>同一局域网建议使用局域网互传</p>
-					{status && <p className='rounded-full border border-border bg-article px-3 py-1.5'>{status}</p>}
 				</div>
 			</div>
 
@@ -447,6 +464,19 @@ export function TransferTool({ initialCode = '' }: TransferToolProps) {
 				</button>
 			</div>
 
+			{status && (
+				<div className='flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-article px-4 py-3 text-sm'>
+					<p role='status' className='text-secondary'>{status}</p>
+					{busy && (
+						<button onClick={() => {
+							setStatus('正在取消传输...')
+							activeTransfer.current?.abort()
+						}} className='flex shrink-0 items-center gap-2 rounded-full border border-border px-3 py-1.5 text-xs font-medium'>
+							<X size={14} />取消传输
+						</button>
+					)}
+				</div>
+			)}
 			<div className='grid items-start gap-5 xl:grid-cols-2'>
 				{relaySections}
 			</div>

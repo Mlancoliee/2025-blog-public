@@ -1,6 +1,7 @@
 // Adapted from Orbitalis, Copyright (c) 2026 WinriseF. MIT license: ./LICENSE.
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { createAtmosphereMaterial } from '@/lib/orbitalis-atmosphere'
 import { createPlanetStationMotion, type PlanetStationMotion, type PlanetStationMotionManifest, type PlanetStationQuaternion, type PlanetStationVector3 as CinematicVector3 } from './station-motion'
 import { LunarGpuMemoryError } from './lunar-controller'
 import { sceneAssetUrl, type TextureQuality, type TextureState, type TextureLevel } from './scene-assets'
@@ -16,18 +17,11 @@ export type LunarPose = {
 	/** World rotation of the circular station orbit and inward-facing frame. */
 	stationFrame?: PlanetStationQuaternion
 }
-export type LunarResolution = {
-	width: number
-	height: number
-	requestedWidth: number
-	requestedHeight: number
-	limited: boolean
-}
 export type LunarScene = {
 	stationDrag?: LunarStationDrag
 	setTextureQuality: (quality: TextureQuality) => Promise<boolean>
 	render: (pose: LunarPose, view?: LunarView) => void
-	resize: (width: number, height: number, pixelRatio: number) => LunarResolution | void
+	resize: (width: number, height: number, pixelRatio: number) => void
 	dispose: () => void
 }
 export type LunarModelManifest = { files: string[] }
@@ -81,28 +75,7 @@ export function cinematicFov(baseFov: number, referenceAspect: number, aspect: n
 function addAtmosphere(scene: THREE.Scene, atmosphere: SceneManifest['atmosphere']) {
 	const geometry = new THREE.SphereGeometry(1, 96, 48)
 	for (const layer of atmosphere.layers) {
-		const material = new THREE.ShaderMaterial({
-			uniforms: {
-				tint: { value: new THREE.Color().fromArray(layer.colorLinear).multiplyScalar(layer.emission) },
-				power: { value: layer.power }, opacity: { value: layer.opacity },
-				sunDirection: { value: new THREE.Vector3().fromArray(atmosphere.lightDirection).normalize() },
-				ambient: { value: atmosphere.lightAmbient }
-			},
-			vertexShader: `varying vec3 worldNormal; varying vec3 worldPosition;
-				void main(){ vec4 world = modelMatrix * vec4(position, 1.0); worldPosition = world.xyz;
-				worldNormal = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * world; }`,
-			fragmentShader: `uniform vec3 tint; uniform float power; uniform float opacity;
-				uniform vec3 sunDirection; uniform float ambient; varying vec3 worldNormal; varying vec3 worldPosition;
-				void main(){ vec3 n = normalize(worldNormal); vec3 v = normalize(cameraPosition - worldPosition);
-					float rim = pow(1.0 - clamp(abs(dot(n, v)), 0.0, 1.0), power);
-					float light = max(dot(n, sunDirection), 0.0) + ambient;
-					gl_FragColor = vec4(tint, clamp(rim * opacity * light, 0.0, 1.0));
-					#include <tonemapping_fragment>
-					#include <colorspace_fragment>
-				}`,
-			transparent: true, depthWrite: false, side: THREE.FrontSide,
-			blending: THREE.NormalBlending
-		})
+		const material = createAtmosphereMaterial(layer, atmosphere.lightDirection, atmosphere.lightAmbient)
 		const shell = new THREE.Mesh(geometry, material)
 		shell.name = 'ThinAtmosphericLimb'
 		shell.position.fromArray(atmosphere.center)
@@ -325,13 +298,7 @@ export async function createLunarScene(host: HTMLElement, signal: AbortSignal, o
 				// Set actual pixels explicitly; CSS remains 100% of the viewport.
 				renderer.setPixelRatio(1)
 				renderer.setSize(bufferWidth, bufferHeight, false)
-				const actualWidth = gl.drawingBufferWidth
-				const actualHeight = gl.drawingBufferHeight
-				if (actualWidth < 1 || actualHeight < 1) throw new Error('WebGL drawing buffer is unavailable')
-				return {
-					width: actualWidth, height: actualHeight, requestedWidth, requestedHeight,
-					limited: actualWidth < requestedWidth || actualHeight < requestedHeight
-				}
+				if (gl.drawingBufferWidth < 1 || gl.drawingBufferHeight < 1) throw new Error('WebGL drawing buffer is unavailable')
 			},
 			dispose
 		}

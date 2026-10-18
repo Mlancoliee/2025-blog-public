@@ -8,7 +8,7 @@ import { initialTextureState, sceneAssetUrl, TEXTURE_QUALITIES } from './scene-a
 import styles from './orbitalis.module.css'
 
 const initialState: LunarState = {
-	phase: 'poster', rotating: false, dragging: false, zoom: 1, resolution: null, fallbackReason: null
+	phase: 'poster', rotating: false, dragging: false, zoom: 1, fallbackReason: null
 }
 
 export default function OrbitalisClient() {

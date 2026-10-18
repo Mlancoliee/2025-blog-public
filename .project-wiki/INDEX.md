@@ -5,6 +5,7 @@ This directory is the compact maintenance map for `2025-blog-public`. Read the m
 | Module | Read when working on |
 | --- | --- |
 | [Frontend runtime](./modules/frontend.md) | Layout, theme, navigation, homepage, calendar, animation, rendering performance. |
+| [InkStack](./modules/inkstack.md) | `/home` private notes, browser encryption, unlock, sync/conflicts, API Keys and shared-theme workspace. |
 | [Content and reading](./modules/content.md) | Blog data, Markdown, images, article UI, news, likes, content maintenance. |
 | [Public transfer](./modules/public-transfer.md) | `/t` encrypted relay, EdgeOne endpoints, Blob lifecycle, administration, cleanup. |
 | [LAN transfer](./modules/lan-transfer.md) | V14 rooms, signaling, WebRTC, native Agent, scheduler, recovery, diagnostics. |

@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { applyTimeTheme, getMsUntilNextTimeTheme, getTimeTheme, getTimeThemeName, timeThemes, type TimeTheme, type TimeThemeName } from '@/lib/time-theme'
+import { applyTimeTheme, getManualTimeTheme, manualThemeStorageKey, getMsUntilNextTimeTheme, getTimeTheme, getTimeThemeName, timeThemes, type TimeTheme, type TimeThemeName } from '@/lib/time-theme'
 
 const themeCycle: TimeThemeName[] = ['dawn', 'noon', 'sunset', 'night']
 
@@ -39,7 +39,7 @@ const TimeThemeContext = createContext<TimeThemeContextValue>({
 
 export function TimeThemeProvider({ children }: { children: React.ReactNode }) {
 	const [theme, setTheme] = useState<TimeTheme>(() => getInitialThemeFromDom())
-	const [manualThemeName, setManualThemeName] = useState<TimeThemeName | null>(null)
+	const [manualThemeName, setManualThemeName] = useState<TimeThemeName | null>(getManualTimeTheme)
 	const [transitioning, setTransitioning] = useState(false)
 	const themeTransitionId = useRef(0)
 
@@ -93,6 +93,7 @@ export function TimeThemeProvider({ children }: { children: React.ReactNode }) {
 	}, [applyTheme, manualThemeName])
 
 	const setThemeName = useCallback((name: TimeThemeName) => {
+		try { sessionStorage.setItem(manualThemeStorageKey, name) } catch { /* Theme still works when browser storage is unavailable. */ }
 		setManualThemeName(name)
 		applyTheme(timeThemes[name])
 	}, [applyTheme])

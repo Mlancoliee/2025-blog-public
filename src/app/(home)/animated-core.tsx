@@ -36,7 +36,6 @@ export default function AnimatedCore({ className }: AnimatedCoreProps) {
 		if (!container) return
 		const controller = new AbortController()
 		let started = false
-		let cleanup: (() => void) | undefined
 		const observer = new IntersectionObserver(entries => {
 			if (started || !entries.some(entry => entry.isIntersecting)) return
 			started = true
@@ -49,10 +48,6 @@ export default function AnimatedCore({ className }: AnimatedCoreProps) {
 					() => setReady(true),
 					() => setReady(false)
 				))
-				.then(dispose => {
-					if (controller.signal.aborted) dispose()
-					else cleanup = dispose
-				})
 				.catch(() => {
 					if (!controller.signal.aborted) setReady(false)
 				})
@@ -61,7 +56,6 @@ export default function AnimatedCore({ className }: AnimatedCoreProps) {
 		return () => {
 			observer.disconnect()
 			controller.abort()
-			cleanup?.()
 		}
 	}, [])
 

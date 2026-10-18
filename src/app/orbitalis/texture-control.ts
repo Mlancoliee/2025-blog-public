@@ -14,7 +14,6 @@ export function createTextureControl(
 	let request: AbortController | undefined
 	let pending: Promise<boolean> | undefined
 	let disposed = false
-	let revision = 0
 	let state: TextureState = { active: null, requested: '1K', loading: false, supported, dimensions: null, error: null }
 	const report = (patch: Partial<TextureState>) => {
 		state = { ...state, ...patch }
@@ -27,7 +26,6 @@ export function createTextureControl(
 	const dispose = () => {
 		if (disposed) return
 		disposed = true
-		revision++
 		request?.abort()
 		pending = undefined
 		encoded.clear()
@@ -38,7 +36,7 @@ export function createTextureControl(
 	}
 	signal.addEventListener('abort', dispose, { once: true })
 
-	const load = async (quality: TextureQuality, id: number, controller: AbortController) => {
+	const load = async (quality: TextureQuality, controller: AbortController) => {
 		const level = levels[quality]
 		let texture: THREE.Texture | undefined
 		let bitmap: ImageBitmap | undefined
@@ -58,7 +56,7 @@ export function createTextureControl(
 			}
 			controller.signal.throwIfAborted()
 			bitmap = await createImageBitmap(source, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' })
-			if (id !== revision || disposed) return false
+			controller.signal.throwIfAborted()
 			if (bitmap.width !== level.width || bitmap.height !== level.height) throw new Error('dimensions')
 			decoded = true
 			texture = new THREE.Texture(bitmap)
@@ -80,7 +78,7 @@ export function createTextureControl(
 			report({ active: quality, loading: false, dimensions: [level.width, level.height] })
 			return true
 		} catch (error) {
-			if (id === revision && !disposed && !controller.signal.aborted) {
+			if (!controller.signal.aborted) {
 				if (!decoded) encoded.delete(quality)
 				const message = error instanceof Error && error.message === 'memory'
 					? '显存不足，已保留现有清晰度'
@@ -92,7 +90,7 @@ export function createTextureControl(
 			controller.abort()
 			texture?.dispose()
 			bitmap?.close()
-			if (id === revision) {
+			if (request === controller) {
 				request = undefined
 				pending = undefined
 			}
@@ -107,7 +105,6 @@ export function createTextureControl(
 				return Promise.resolve(false)
 			}
 			if (state.loading && state.requested === quality && pending) return pending
-			const id = ++revision
 			request?.abort()
 			request = undefined
 			pending = undefined
@@ -118,7 +115,7 @@ export function createTextureControl(
 			const controller = new AbortController()
 			request = controller
 			report({ requested: quality, loading: true, error: null })
-			pending = load(quality, id, controller)
+			pending = load(quality, controller)
 			return pending
 		},
 		dispose
